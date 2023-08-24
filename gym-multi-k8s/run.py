@@ -15,15 +15,15 @@ logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
 parser = argparse.ArgumentParser(description='Run RL Agent!')
-parser.add_argument('--alg', default='recurrent_ppo', help='The algorithm: ["ppo", "recurrent_ppo", "a2c", "mask_ppo"]')
+parser.add_argument('--alg', default='mask_ppo', help='The algorithm: ["ppo", "recurrent_ppo", "a2c", "mask_ppo"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada"]')
 parser.add_argument('--training', default=True, action="store_true", help='Training mode')
 parser.add_argument('--testing', default=False, action="store_true", help='Testing mode')
 parser.add_argument('--loading', default=False, action="store_true", help='Loading mode')
 parser.add_argument('--load_path', default='logs/model/test.zip', help='Loading path, ex: logs/model/test.zip')
 parser.add_argument('--test_path', default='logs/model/test.zip', help='Testing path, ex: logs/model/test.zip')
-parser.add_argument('--steps', default=50000, help='Save model after X steps')
-parser.add_argument('--total_steps', default=100000, help='The total number of steps.')
+parser.add_argument('--steps', default=100000, help='Save model after X steps')
+parser.add_argument('--total_steps', default=500000, help='The total number of steps.')
 
 # TODO: add other arguments if needed
 # parser.add_argument('--k8s', default=False, action="store_true", help='K8s mode')
@@ -70,7 +70,7 @@ def get_env(env_name):
         # otherwise just comment the following lines
         _, _, _, info = env.step(0)
         info_keywords = tuple(info.keys())
-        env = SubprocVecEnv([lambda: KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100, call_duration_r=1, episode_length=100) for i in range(4)])
+        env = SubprocVecEnv([lambda: KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100, call_duration_r=1, episode_length=100) for i in range(8)])
         env = VecMonitor(env, info_keywords=info_keywords)
     else:
         logging.info('Invalid environment!')

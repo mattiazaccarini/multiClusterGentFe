@@ -42,13 +42,14 @@ class KarmadaSchedulingEnv(gym.Env):
         self.call_duration_r = call_duration_r
         self.episode_length = episode_length
         self.running_requests: list[DeploymentRequest] = []
-        # self.seed = 42
-        # self.np_random, seed = seeding.np_random(self.seed)
+
+        self.seed = 42
+        self.np_random, seed = seeding.np_random(self.seed)
 
         logging.info("[Init] Env: {} | Version {} |".format(self.name, self.__version__))
 
         # Defined as a matrix having as rows the nodes and columns their associated metrics
-        self.observation_space = spaces.Box(low=0, high=1, shape=(num_clusters + 1, 8),
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(num_clusters + 1, 8),
                                             dtype=np.float32)
 
         # Action Space
@@ -68,8 +69,8 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Resource capacity
         # TODO: Perhaps add Storage as well later
-        self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
-        self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
+        self.cpu_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=num_clusters)
+        self.memory_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=num_clusters)
 
         # Keeps track of allocated resources
         self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=num_clusters)
@@ -148,9 +149,8 @@ class KarmadaSchedulingEnv(gym.Env):
         # Get next request
         self.next_request()
 
-        # TODO: Save obs to csv: update function for this env
-        # date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # self.save_obs_to_csv(self.obs_csv, np.array(ob), date, self.deploymentList[0].latency)
+        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # self.save_obs_to_csv(self.obs_csv, np.array(ob), date)
 
         self.info = {
             "reward": reward,
@@ -198,8 +198,8 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Reset Resources
         # TODO: Perhaps add Storage as well later
-        self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
-        self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
+        self.cpu_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=self.num_clusters)
+        self.memory_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=self.num_clusters)
 
         self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
         self.allocated_memory = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
@@ -364,43 +364,48 @@ class KarmadaSchedulingEnv(gym.Env):
         # logging.info('[Get Obs State]: obs: {}'.format(observation))
         return observation
 
-    # TODO: update function save_obs_to_csv
-    '''
-    def save_obs_to_csv(self, obs_file, obs, date, latency):
+
+    def save_obs_to_csv(self, obs_file, obs, date):
         file = open(obs_file, 'a+', newline='')  # append
         # file = open(file_name, 'w', newline='') # new
         fields = []
+        cluster_obs = {}
         with file:
             fields.append('date')
             for n in range(self.num_clusters):
-                fields.append("cluster_" + str(n) + '_available_cpu')
-                fields.append("cluster_" + str(n) + '_cpu_capacity')
-                fields.append("cluster_" + str(n) + '_available_memory')
-                fields.append("cluster_" + str(n) + '_memory_capacity')
-            
+                fields.append("cluster_" + str(n + 1) + '_allocated_cpu')
+                fields.append("cluster_" + str(n + 1) + '_cpu_capacity')
+                fields.append("cluster_" + str(n + 1) + '_allocated_memory')
+                fields.append("cluster_" + str(n + 1) + '_memory_capacity')
+                fields.append("cluster_" + str(n + 1) + '_num_replicas')
+                fields.append("cluster_" + str(n + 1) + '_cpu_request')
+                fields.append("cluster_" + str(n + 1) + '_memory_request')
+                fields.append("cluster_" + str(n + 1) + '_dt')
+
+            # logging.info("[Save Obs] fields: {}".format(fields))
+
             writer = csv.DictWriter(file, fieldnames=fields)
             # writer.writeheader() # write header
-            
-            writer.writerow(
-                {'date': date,
-                 'redis-leader_num_pods': int("{}".format(obs[0])),
-                 'redis-leader_desired_replicas': int("{}".format(obs[1])),
-                 'redis-leader_cpu_usage': int("{}".format(obs[2])),
-                 'redis-leader_mem_usage': int("{}".format(obs[3])),
-                 'redis-leader_traffic_in': int("{}".format(obs[4])),
-                 'redis-leader_traffic_out': int("{}".format(obs[5])),
-                 'redis-leader_latency': float("{:.3f}".format(latency)),
-                 'redis-follower_num_pods': int("{}".format(obs[6])),
-                 'redis-follower_desired_replicas': int("{}".format(obs[7])),
-                 'redis-follower_cpu_usage': int("{}".format(obs[8])),
-                 'redis-follower_mem_usage': int("{}".format(obs[9])),
-                 'redis-follower_traffic_in': int("{}".format(obs[10])),
-                 'redis-follower_traffic_out': int("{}".format(obs[11])),
-                 'redis-follower_latency': float("{:.3f}".format(latency))
-                 }
-            )
+
+            cluster_obs = {}
+            cluster_obs.update({fields[0]: date})
+
+            for n in range(self.num_clusters):
+                i = self.get_iteration_number(n)
+                cluster_obs.update({fields[i+1]: obs[n][0]})
+                cluster_obs.update({fields[i+2]: obs[n][1]})
+                cluster_obs.update({fields[i+3]: obs[n][2]})
+                cluster_obs.update({fields[i+4]: obs[n][3]})
+                cluster_obs.update({fields[i+5]: obs[n][4]})
+                cluster_obs.update({fields[i+6]: obs[n][5]})
+                cluster_obs.update({fields[i+7]: obs[n][6]})
+                cluster_obs.update({fields[i+8]: obs[n][7]})
+            writer.writerow(cluster_obs)
         return
-        '''
+
+    def get_iteration_number(self, n):
+        num_fields_per_cluster = 8
+        return num_fields_per_cluster * n
 
     def enqueue_request(self, request: DeploymentRequest) -> None:
         heapq.heappush(self.running_requests, (request.departure_time, request))
@@ -491,9 +496,9 @@ class KarmadaSchedulingEnv(gym.Env):
 
     def deployment_generator(self):
         deployment_list = get_c2e_deployment_list()
-        n = self.np_random.integers(low=0, high=len(deployment_list))
-        d = deployment_list[n]
-        d.num_replicas = self.np_random.integers(low=1, high=MAX_REPLICAS)
+        n = self.np_random.random_integers(low=0, high=len(deployment_list))
+        d = deployment_list[n-1]
+        d.num_replicas = self.np_random.random_integers(low=1, high=MAX_REPLICAS)
         return d
 
     def next_request(self) -> None:

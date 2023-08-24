@@ -69,6 +69,78 @@ def get_c2e_deployment_list():
                           cpu_request=0.2, cpu_limit=1.0,
                           memory_request=0.6, memory_limit=0.6,
                           arrival_time=0, departure_time=0),
+
+        # 5 dispatch-router
+        DeploymentRequest(name="dispatch-router", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=1.0,
+                          memory_request=0.06, memory_limit=0.25,
+                          arrival_time=0, departure_time=0),
+
+        # 6 ditto-connectivity
+        DeploymentRequest(name="ditto-connectivity", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=2.0,
+                          memory_request=0.7, memory_limit=1.0,
+                          arrival_time=0, departure_time=0),
+
+        # 7 ditto-gateway
+        DeploymentRequest(name="ditto-gateway", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=2.0,
+                          memory_request=0.5, memory_limit=0.7,
+                          arrival_time=0, departure_time=0),
+
+        # 8 ditto-nginx
+        DeploymentRequest(name="ditto-nginx", num_replicas=1,
+                          cpu_request=0.05, cpu_limit=0.15,
+                          memory_request=0.016, memory_limit=0.032,
+                          arrival_time=0, departure_time=0),
+
+        # 9 ditto-policies
+        DeploymentRequest(name="ditto-policies", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=2.0,
+                          memory_request=0.5, memory_limit=0.7,
+                          arrival_time=0, departure_time=0),
+
+        # 10 ditto-swagger-ui
+        DeploymentRequest(name="ditto-swagger-ui", num_replicas=1,
+                          cpu_request=0.05, cpu_limit=0.1,
+                          memory_request=0.016, memory_limit=0.032,
+                          arrival_time=0, departure_time=0),
+
+        # 11 ditto-things
+        DeploymentRequest(name="ditto-things", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=2.0,
+                          memory_request=0.5, memory_limit=0.7,
+                          arrival_time=0, departure_time=0),
+
+        # 12 ditto-things-search
+        DeploymentRequest(name="ditto-things-search", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=2.0,
+                          memory_request=0.5, memory_limit=0.7,
+                          arrival_time=0, departure_time=0),
+
+        # 13 ditto-mongo-db
+        DeploymentRequest(name="ditto-mongo-db", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=2.0,
+                          memory_request=0.5, memory_limit=0.7,
+                          arrival_time=0, departure_time=0),
+
+        # 14 service-auth
+        DeploymentRequest(name="service-auth", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=1.0,
+                          memory_request=0.2, memory_limit=0.25,
+                          arrival_time=0, departure_time=0),
+
+        # 15 service-command-router
+        DeploymentRequest(name="service-command-router", num_replicas=1,
+                          cpu_request=0.15, cpu_limit=1.0,
+                          memory_request=0.2, memory_limit=0.5,
+                          arrival_time=0, departure_time=0),
+
+        # 16 service-device-registry
+        DeploymentRequest(name="service-device-registry", num_replicas=1,
+                          cpu_request=0.2, cpu_limit=1.0,
+                          memory_request=0.4, memory_limit=0.4,
+                          arrival_time=0, departure_time=0),
     ]
     return deployment_list
 
