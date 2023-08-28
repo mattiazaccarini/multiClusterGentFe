@@ -69,8 +69,8 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Resource capacity
         # TODO: Perhaps add Storage as well later
-        self.cpu_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=num_clusters)
-        self.memory_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=num_clusters)
+        self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
+        self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
 
         # Keeps track of allocated resources
         self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=num_clusters)
@@ -198,8 +198,8 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Reset Resources
         # TODO: Perhaps add Storage as well later
-        self.cpu_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=self.num_clusters)
-        self.memory_capacity = self.np_random.random_integers(low=2.0, high=6.0, size=self.num_clusters)
+        self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
+        self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
 
         self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
         self.allocated_memory = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
@@ -496,9 +496,9 @@ class KarmadaSchedulingEnv(gym.Env):
 
     def deployment_generator(self):
         deployment_list = get_c2e_deployment_list()
-        n = self.np_random.random_integers(low=0, high=len(deployment_list))
+        n = self.np_random.integers(low=0, high=len(deployment_list))
         d = deployment_list[n-1]
-        d.num_replicas = self.np_random.random_integers(low=1, high=MAX_REPLICAS)
+        d.num_replicas = self.np_random.integers(low=1, high=MAX_REPLICAS)
         return d
 
     def next_request(self) -> None:
