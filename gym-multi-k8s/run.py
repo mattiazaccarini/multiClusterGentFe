@@ -9,21 +9,24 @@ from sb3_contrib import RecurrentPPO, MaskablePPO
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from envs.karmada_scheduling_env import KarmadaSchedulingEnv
 from envs.fog_env import FogOrchestrationEnv
+from envs.ppo_deepset import PPO_DeepSets
 
 # Logging
 logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
 parser = argparse.ArgumentParser(description='Run RL Agent!')
-parser.add_argument('--alg', default='ppo', help='The algorithm: ["ppo", "recurrent_ppo", "a2c", "mask_ppo"]')
+parser.add_argument('--alg', default='a2c',
+                    help='The algorithm: ["ppo", "recurrent_ppo", "a2c", "mask_ppo", "ppo_deepsets"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada", "fog"]')
+parser.add_argument('--reward', default='risk', help='reward: ["naive", "risk", "binpack"]')
 parser.add_argument('--training', default=True, action="store_true", help='Training mode')
 parser.add_argument('--testing', default=False, action="store_true", help='Testing mode')
 parser.add_argument('--loading', default=False, action="store_true", help='Loading mode')
 parser.add_argument('--load_path', default='logs/model/test.zip', help='Loading path, ex: logs/model/test.zip')
 parser.add_argument('--test_path', default='logs/model/test.zip', help='Testing path, ex: logs/model/test.zip')
 parser.add_argument('--steps', default=500000, help='Save model after X steps')
-parser.add_argument('--total_steps', default=1000000, help='The total number of steps.')
+parser.add_argument('--total_steps', default=500000, help='The total number of steps.')
 
 # TODO: add other arguments if needed
 # parser.add_argument('--k8s', default=False, action="store_true", help='K8s mode')
@@ -42,6 +45,8 @@ def get_model(alg, env, tensorboard_log):
         model = A2C("MlpPolicy", env, verbose=1, tensorboard_log=tensorboard_log)  # , n_steps=steps
     elif alg == 'mask_ppo':
         model = MaskablePPO("MlpPolicy", env, gamma=0.95, verbose=1, tensorboard_log=tensorboard_log)  # , n_steps=steps
+    elif alg == 'ppo_deepsets':  # TODO: fails as d3rlpy approach
+        model = PPO_DeepSets(env=env, num_envs=8, num_steps=100, n_minibatches=8, tensorboard_log=tensorboard_log)
     else:
         logging.info('Invalid algorithm!')
 
@@ -58,11 +63,13 @@ def get_load_model(alg, tensorboard_log, load_path):
         return A2C.load(load_path, reset_num_timesteps=False, verbose=1, tensorboard_log=tensorboard_log)
     elif alg == 'mask_ppo':
         return MaskablePPO.load(load_path, reset_num_timesteps=False, verbose=1, tensorboard_log=tensorboard_log)
+    elif alg == 'ppo_deepsets':
+        return PPO_DeepSets.load(load_path)
     else:
         logging.info('Invalid algorithm!')
 
 
-def get_env(env_name):
+def get_env(env_name, reward_function):
     env = 0
     if env_name == "karmada":
         env = KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100, call_duration_r=1, episode_length=100)
@@ -71,7 +78,8 @@ def get_env(env_name):
         _, _, _, info = env.step(0)
         info_keywords = tuple(info.keys())
         env = SubprocVecEnv([lambda: KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100,
-                                                          call_duration_r=1, episode_length=100) for i in range(8)])
+                                                          call_duration_r=1, episode_length=100,
+                                                          reward_function=reward_function) for i in range(8)])
         env = VecMonitor(env, info_keywords=info_keywords)
     elif env == 'fog':
         env = FogOrchestrationEnv(n_nodes=4, arrival_rate_r=100, call_duration_r=1, episode_length=100)
@@ -126,6 +134,7 @@ def main():
 
     alg = args.alg
     env_name = args.env_name
+    reward = args.reward
     loading = args.loading
     load_path = args.load_path
     training = args.training
@@ -135,13 +144,13 @@ def main():
     steps = int(args.steps)
     total_steps = int(args.total_steps)
 
-    env = get_env(env_name)
+    env = get_env(env_name, reward)
 
     tensorboard_log = "results/" + env_name + "/"
 
-    name = alg + "_env_" + env_name + "_totalSteps_" + str(total_steps)
+    name = alg + "_env_" + env_name + "_reward_" + reward + "_totalSteps_" + str(total_steps)
 
-    # callback
+    # callback: does not work with multiple envs
     checkpoint_callback = CheckpointCallback(save_freq=steps, save_path="logs/" + name, name_prefix=name)
 
     # Training selected

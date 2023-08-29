@@ -1,10 +1,58 @@
 from typing import Optional
-
 import d3rlpy
+import gym
+import numpy as np
 import torch
 import torch.nn as nn
 import pdb
 from torch.distributions import Categorical
+
+
+def layer_init(layer: nn.Linear, std=np.sqrt(2), bias_const=0.0):
+    nn.init.orthogonal_(layer.weight, std)
+    nn.init.constant_(layer.bias, bias_const)
+    return layer
+
+
+class MLPAgent(nn.Module):
+    def __init__(self, envs: gym.vector.VectorEnv):
+        super().__init__()
+        self.critic = nn.Sequential(
+            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 1), std=1.0),
+        )
+        self.actor = nn.Sequential(
+            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, envs.single_action_space.n), std=0.01),
+        )
+
+    def get_value(self, x: torch.Tensor) -> torch.Tensor:
+        x = torch.flatten(x, start_dim=1)
+        return self.critic(x)
+
+    def get_action(self, x: torch.Tensor, deterministic=True) -> torch.Tensor:
+        x = torch.flatten(x, start_dim=1)
+        logits = self.actor(x)
+        dist = Categorical(logits=logits)
+        if deterministic:
+            return dist.mode()
+        return dist.sample()
+
+    def get_action_and_value(
+        self, x: torch.Tensor, action: torch.Tensor = None
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        x = torch.flatten(x, start_dim=1)
+        logits = self.actor(x)
+        dist = Categorical(logits=logits)
+        if action is None:
+            action = dist.sample()
+        return action, dist.log_prob(action), dist.entropy(), self.critic(x)
 
 
 class EquivariantLayer(nn.Module):

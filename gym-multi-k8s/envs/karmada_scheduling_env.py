@@ -1,5 +1,6 @@
 import csv
 import math
+import operator
 from datetime import datetime
 import heapq
 import time
@@ -7,35 +8,56 @@ import gym
 import numpy as np
 from gym import spaces
 from gym.utils import seeding
-from envs.utils import DeploymentRequest, Cluster, get_c2e_deployment_list, save_to_csv
+from envs.utils import DeploymentRequest, Cluster, get_c2e_deployment_list, save_to_csv, sort_dict_by_value
 import logging
-
-# Number of steps per episode
-DEFAULT_NUM_EPISODE_STEPS = 25
 
 # MAX Number of Replicas per deployment request
 MAX_REPLICAS = 8
 
-# Actions - to modify accordingly
+# Actions - for printing purposes
 ACTIONS = ["All-", "Divide", "Reject"]
 
-# Reward objectives - to modify after accordingly
-LATENCY = 'latency'
-COST = 'cost'
+# Reward objectives
+# Baseline Strategy: +1 if agent accepts request,
+# or -1 if rejects it (if resources were available)
+NAIVE = 'naive'
+
+# Risk-Aware: limit the risk of a cluster being full (100% allocated)
+# which avoids performance degradation if pods request further resources
+RISK_AWARE = 'risk'
+RISK_THRESHOLD = 0.75
+
+# BIN_PACK: most allocated clusters preferred
+# avoid under utilization, opposing goal to risk aware
+BINPACK = "binpack"
+
+# Other reward functions to consider:
+# LATENCY = 'latency'
+# COST = 'cost'
+
+# DEFAULTS for Env configuration
+DEFAULT_NUM_EPISODE_STEPS = 100
+DEFAULT_NUM_CLUSTERS = 4
+DEFAULT_ARRIVAL_RATE = 100
+DEFAULT_CALL_DURATION = 1
+DEFAULT_REWARD_FUNTION = NAIVE
 
 
 class KarmadaSchedulingEnv(gym.Env):
     """ Karmada Scheduling env in Kubernetes - an OpenAI gym environment"""
     metadata = {'render.modes': ['human', 'ansi', 'array']}
 
-    def __init__(self, num_clusters=4, arrival_rate_r=100, call_duration_r=1,
-                 episode_length=DEFAULT_NUM_EPISODE_STEPS, goal_reward=COST):
+    def __init__(self, num_clusters=DEFAULT_NUM_CLUSTERS,
+                 arrival_rate_r=DEFAULT_ARRIVAL_RATE,
+                 call_duration_r=DEFAULT_CALL_DURATION,
+                 episode_length=DEFAULT_NUM_EPISODE_STEPS,
+                 reward_function=DEFAULT_REWARD_FUNTION):
         # Define action and observation space
 
         super(KarmadaSchedulingEnv, self).__init__()
         self.name = "karmada_gym"
         self.__version__ = "0.0.1"
-        self.goal_reward = goal_reward
+        self.reward_function = reward_function
 
         self.num_clusters = num_clusters
         self.arrival_rate_r = arrival_rate_r
@@ -49,7 +71,7 @@ class KarmadaSchedulingEnv(gym.Env):
         logging.info("[Init] Env: {} | Version {} |".format(self.name, self.__version__))
 
         # Defined as a matrix having as rows the nodes and columns their associated metrics
-        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(num_clusters + 1, 8),
+        self.observation_space = spaces.Box(low=0.0, high=6.0, shape=(num_clusters + 1, 8),
                                             dtype=np.float32)
 
         # Action Space
@@ -68,13 +90,13 @@ class KarmadaSchedulingEnv(gym.Env):
         self.deployment_request = None
 
         # Resource capacity
-        # TODO: Perhaps add Storage as well later
+        # TODO: Consider Storage as well later?
         self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
         self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
 
         # Keeps track of allocated resources
-        self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=num_clusters)
-        self.allocated_memory = self.np_random.uniform(low=0.0, high=0.2, size=num_clusters)
+        self.allocated_cpu = self.np_random.uniform(low=0.5, high=2.0, size=num_clusters)
+        self.allocated_memory = self.np_random.uniform(low=0.5, high=2.0, size=num_clusters)
 
         # Keeps track of Free resources for deployment requests
         self.free_cpu = np.zeros(num_clusters)
@@ -87,12 +109,10 @@ class KarmadaSchedulingEnv(gym.Env):
         self.split_number_replicas = np.zeros(num_clusters)
         self.calculated_split_number_replicas = np.zeros(num_clusters)
 
-        # TODO: print correctly
         logging.info("[Init] Resources:")
         logging.info("[Init] CPU Capacity: {}".format(self.cpu_capacity))
         logging.info("[Init] CPU allocated: {}".format(self.allocated_cpu))
         logging.info("[Init] CPU free: {}".format(self.free_cpu))
-
         logging.info("[Init] MEM Capacity: {}".format(self.memory_capacity))
         logging.info("[Init] MEM allocated: {}".format(self.allocated_memory))
         logging.info("[Init] MEM free: {}".format(self.free_memory))
@@ -153,10 +173,10 @@ class KarmadaSchedulingEnv(gym.Env):
         # self.save_obs_to_csv(self.obs_csv, np.array(ob), date)
 
         self.info = {
-            "reward": reward,
-            "action": action,
-            "block_prob": 1 - (self.accepted_requests / self.offered_requests),
-            "ep_block_prob": 1 - (self.ep_accepted_requests / self.current_step),
+            "reward": float("{:.2f}".format(reward)),
+            "action": float("{:.2f}".format(action)),
+            "block_prob": float("{:.2f}".format(1 - (self.accepted_requests / self.offered_requests))),
+            "ep_block_prob": float("{:.2f}".format(1 - (self.ep_accepted_requests / self.current_step))),
         }
 
         if self.current_step == self.episode_length:
@@ -173,12 +193,63 @@ class KarmadaSchedulingEnv(gym.Env):
     # TODO: update reward function based on Multi-objective function
     def get_reward(self):
         """ Calculate Rewards """
-        if self.penalty:
-            reward = -1
-        else:
-            reward = 1
+        if self.reward_function == NAIVE:
+            if self.penalty:
+                return -1
+            else:
+                return 1
+        elif self.reward_function == RISK_AWARE:
+            if self.penalty:
+                return -1
+            else:
+                logging.info('[Get Reward] Risk-aware Function Selected...')
+                max_risk = 0
+                for n in range(self.num_clusters):
+                    # Calculate risk for CPU and Memory
+                    risk_cpu = self.allocated_cpu[n] / self.cpu_capacity[n]
+                    risk_mem = self.allocated_memory[n] / self.memory_capacity[n]
 
-        return reward
+                    # Get Max Risk
+                    risk = max(risk_cpu, risk_mem)
+                    logging.info(
+                        '[Get Reward] Cluster: {} | CPU: {} |  '
+                        'Memory : {} | Max Risk: {} |'.format(n + 1, risk_cpu, risk_mem, risk))
+
+                    # Get the Max Risk across all clusters
+                    if max_risk < risk:
+                        max_risk = risk
+
+                logging.info('[Get Reward] Max Risk across all clusters: {} |'.format(max_risk))
+                # reward: +1 if risk lower than threshold, otherwise -1
+                # alternative: r = 1 - maxRisk
+                if max_risk > RISK_THRESHOLD:
+                    return -1
+                else:
+                    return 1
+        elif self.reward_function == BINPACK:  # It results in very low rewards based on the simulation dynamics
+            logging.info('[Get Reward] Binpack Function Selected...')
+            min_percentage = 1  # start as maximum
+            for n in range(self.num_clusters):
+                # Calculate percentage of allocation for CPU and Memory
+                cpu = self.allocated_cpu[n] / self.cpu_capacity[n]
+                mem = self.allocated_memory[n] / self.memory_capacity[n]
+
+                # Get max Percentage: max or min here?
+                minimum_cluster = max(cpu, mem)
+                logging.info(
+                    '[Get Reward] Cluster: {} | CPU: {} |  '
+                    'Memory : {} | Minimum: {} |'.format(n + 1, cpu, mem, minimum_cluster))
+
+                # Get the Minimum percentage of allocation across all clusters
+                if minimum_cluster < min_percentage:
+                    min_percentage = minimum_cluster
+
+            logging.info('[Get Reward] Minimum percentage across all clusters: {} |'.format(min_percentage))
+            # reward: r = min_percentage
+            # alternative: +1 if percentage is higher than threshold, otherwise -1
+            return float("{:.3f}".format(min_percentage))
+        else:
+            logging.info('[Get Reward] Unrecognized reward: {}'.format(self.reward_function))
 
     def reset(self):
         """
@@ -248,9 +319,11 @@ class KarmadaSchedulingEnv(gym.Env):
                 self.accepted_requests += 1
                 self.ep_accepted_requests += 1
                 self.deployment_request.deployed_cluster = action
+                self.penalty = False
                 # Update allocated amounts
                 self.allocated_cpu[action] += self.deployment_request.cpu_request * self.deployment_request.num_replicas
-                self.allocated_memory[action] += self.deployment_request.memory_request * self.deployment_request.num_replicas
+                self.allocated_memory[
+                    action] += self.deployment_request.memory_request * self.deployment_request.num_replicas
                 # Update free resources
                 self.free_cpu[action] = self.cpu_capacity[action] - self.allocated_cpu[action]
                 self.free_memory[action] = self.memory_capacity[action] - self.allocated_memory[action]
@@ -263,14 +336,11 @@ class KarmadaSchedulingEnv(gym.Env):
                 logging.info('[Take Action] Block Divide strategy since only one replica... ')
                 self.penalty = True
             else:
-                # logging.info('[Take Action] Divide strategy chosen... ')
-                self.penalty = False
-
+                logging.info('[Take Action] Divide strategy chosen... ')
                 div = self.distribute_replicas_in_clusters(self.deployment_request.num_replicas,
                                                            self.deployment_request.cpu_request,
                                                            self.deployment_request.memory_request, self.num_clusters,
                                                            self.free_cpu, self.free_memory)
-                # logging.info('[Divide] division: {}'.format(div))
 
                 if self.check_if_clusters_are_full_after_split_deployment(div):
                     self.penalty = True
@@ -310,11 +380,11 @@ class KarmadaSchedulingEnv(gym.Env):
         elif action == self.num_clusters + 1:
             self.penalty = True
         else:
-            logging.info('[Take Action] Unrecognized Action: ' + str(action))
+            logging.info('[Take Action] Unrecognized Action: {}'.format(action))
 
-    # Current Strategy: Distribute evenly. Improved algorithm can be considered
+    # Current Strategy: First Fit Decreasing (FFD)
     def distribute_replicas_in_clusters(self, num_replicas, cpu_req, mem_req, num_clusters, free_cpu, free_mem):
-        # logging.info('[Divide] Num. replicas to distribute: {}'.format(num_replicas))
+        logging.info('[Divide] Num. replicas to distribute: {}'.format(num_replicas))
         distribution = [0] * num_clusters
 
         # min and max replicas
@@ -328,20 +398,44 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # logging.info('[Take Action] Split factors: {}'.format(self.split_number_replicas))
         min_factor = int(math.ceil(min(self.split_number_replicas)))
-        # logging.info('[Take Action] Min factor: {}'.format(min_factor))
-
         if min_factor >= max_replicas:
             min_factor = max_replicas - 1  # To really distribute at the end
 
+        # logging.info('[Take Action] Min factor: {}'.format(min_factor))
+        # Sort the clusters by their remaining capacity (CPU) in decreasing order
+        sorted_clusters_cpu = {}
         for n in range(num_clusters):
-            if num_replicas > 0 and (cpu_req < free_cpu[n] and mem_req < free_mem[n]):
-                if min_factor < num_replicas:
-                    distribution[n] += min_factor
-                    num_replicas -= min_factor
-                else:
+            sorted_clusters_cpu[str(n)] = free_cpu[n]
+
+        sorted_clusters_cpu = sort_dict_by_value(sorted_clusters_cpu, reverse=True)
+
+        for key, value in sorted_clusters_cpu.items():
+            n = int(key)
+            if num_replicas == 0:
+                break
+            if num_replicas > 0 and min_factor < num_replicas and ((cpu_req * min_factor < value) and (mem_req * min_factor < free_mem[n])):
+                distribution[n] += min_factor
+                num_replicas -= min_factor
+            elif num_replicas > 0 and ((cpu_req < value) and (mem_req < free_mem[n])):
+                distribution[n] += min_replicas
+                num_replicas -= min_replicas
+
+        # Still distribute remaining replicas if needed
+        if num_replicas == 0:
+            logging.info('[Divide] Replicas division: {}'.format(distribution))
+            return distribution
+        else:
+            logging.info('[Divide] Replicas still to distribute...')
+            for n in range(num_clusters):
+                if num_replicas == 0:
+                    break
+
+                if (cpu_req < free_cpu[n]) and (mem_req < free_mem[n]):
                     distribution[n] += min_replicas
                     num_replicas -= min_replicas
-        return distribution
+
+            logging.info('[Divide] Replicas division: {}'.format(distribution))
+            return distribution
 
     def get_state(self):
         # Get Observation state
@@ -363,7 +457,6 @@ class KarmadaSchedulingEnv(gym.Env):
         observation = np.concatenate([observation, request_demands], axis=1)
         # logging.info('[Get Obs State]: obs: {}'.format(observation))
         return observation
-
 
     def save_obs_to_csv(self, obs_file, obs, date):
         file = open(obs_file, 'a+', newline='')  # append
@@ -392,14 +485,14 @@ class KarmadaSchedulingEnv(gym.Env):
 
             for n in range(self.num_clusters):
                 i = self.get_iteration_number(n)
-                cluster_obs.update({fields[i+1]: obs[n][0]})
-                cluster_obs.update({fields[i+2]: obs[n][1]})
-                cluster_obs.update({fields[i+3]: obs[n][2]})
-                cluster_obs.update({fields[i+4]: obs[n][3]})
-                cluster_obs.update({fields[i+5]: obs[n][4]})
-                cluster_obs.update({fields[i+6]: obs[n][5]})
-                cluster_obs.update({fields[i+7]: obs[n][6]})
-                cluster_obs.update({fields[i+8]: obs[n][7]})
+                cluster_obs.update({fields[i + 1]: obs[n][0]})
+                cluster_obs.update({fields[i + 2]: obs[n][1]})
+                cluster_obs.update({fields[i + 3]: obs[n][2]})
+                cluster_obs.update({fields[i + 4]: obs[n][3]})
+                cluster_obs.update({fields[i + 5]: obs[n][4]})
+                cluster_obs.update({fields[i + 6]: obs[n][5]})
+                cluster_obs.update({fields[i + 7]: obs[n][6]})
+                cluster_obs.update({fields[i + 8]: obs[n][7]})
             writer.writerow(cluster_obs)
         return
 
@@ -421,7 +514,7 @@ class KarmadaSchedulingEnv(gym.Env):
         # 2 additional actions: Divide and Reject
         valid_actions[self.num_clusters] = True
         valid_actions[self.num_clusters + 1] = True
-        logging.info('[Action Mask]: Valid actions {} |'.format(valid_actions))
+        # logging.info('[Action Mask]: Valid actions {} |'.format(valid_actions))
         return valid_actions
 
     def check_if_cluster_is_full_after_full_deployment(self, action):
@@ -430,7 +523,7 @@ class KarmadaSchedulingEnv(gym.Env):
 
         if (self.allocated_cpu[action] + total_cpu > 0.95 * self.cpu_capacity[action]
                 or self.allocated_memory[action] + total_memory > 0.95 * self.memory_capacity[action]):
-            logging.info('[Check]: Cluster {} is full...'.format(action+1))
+            logging.info('[Check]: Cluster {} is full...'.format(action + 1))
             return True
 
         return False
@@ -441,7 +534,7 @@ class KarmadaSchedulingEnv(gym.Env):
             total_memory = self.deployment_request.memory_request * div[d]
 
             if (self.allocated_cpu[d] + total_cpu > 0.95 * self.cpu_capacity[d]
-                or self.allocated_memory[d] + total_memory > 0.95 * self.memory_capacity[d]):
+                    or self.allocated_memory[d] + total_memory > 0.95 * self.memory_capacity[d]):
                 logging.info('[Check]: Cluster {} is full...'.format(d))
                 return True
 
@@ -497,7 +590,7 @@ class KarmadaSchedulingEnv(gym.Env):
     def deployment_generator(self):
         deployment_list = get_c2e_deployment_list()
         n = self.np_random.integers(low=0, high=len(deployment_list))
-        d = deployment_list[n-1]
+        d = deployment_list[n - 1]
         d.num_replicas = self.np_random.integers(low=1, high=MAX_REPLICAS)
         return d
 

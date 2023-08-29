@@ -32,6 +32,7 @@ class Cluster:
     # bandwidth_matrix: list[int]
     # latency_matrix: list[int]
 
+
 # NOT used by Karmada Scheduling env!
 # Request Info for Fog env
 @dataclass
@@ -45,6 +46,11 @@ class Request:
     latency: int
     serving_node: int = None
     service_type: int = None  # currently: 0==SVE 1==SDP 2==APP 3==LAF
+
+
+# Reverses a dict
+def sort_dict_by_value(d, reverse=False):
+    return dict(sorted(d.items(), key=lambda x: x[1], reverse=reverse))
 
 
 def get_c2e_deployment_list():
@@ -177,6 +183,7 @@ def greedy_lb_policy(obs: npt.NDArray, action_mask: npt.NDArray) -> int:
         return len(action_mask)
     return feasible_nodes[np.argmin(mean_load)]
 
+
 # TODO: modify function
 '''
 def save_obs_to_csv(file_name, timestamp, num_pods, desired_replicas, cpu_usage, mem_usage,
@@ -201,6 +208,7 @@ def save_obs_to_csv(file_name, timestamp, num_pods, desired_replicas, cpu_usage,
              'lstm_5_step': int("{}".format(lstm_5_step))}
         )
 '''
+
 
 def save_to_csv(file_name, episode, reward, execution_time):
     file = open(file_name, 'a+', newline='')  # append
