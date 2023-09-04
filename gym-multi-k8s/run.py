@@ -14,9 +14,8 @@ from envs.ppo_deepset import PPO_DeepSets
 # Logging
 logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-
 parser = argparse.ArgumentParser(description='Run RL Agent!')
-parser.add_argument('--alg', default='a2c',
+parser.add_argument('--alg', default='ppo',
                     help='The algorithm: ["ppo", "recurrent_ppo", "a2c", "mask_ppo", "ppo_deepsets"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada", "fog"]')
 parser.add_argument('--reward', default='risk', help='reward: ["naive", "risk", "binpack"]')
@@ -45,8 +44,8 @@ def get_model(alg, env, tensorboard_log):
         model = A2C("MlpPolicy", env, verbose=1, tensorboard_log=tensorboard_log)  # , n_steps=steps
     elif alg == 'mask_ppo':
         model = MaskablePPO("MlpPolicy", env, gamma=0.95, verbose=1, tensorboard_log=tensorboard_log)  # , n_steps=steps
-    elif alg == 'ppo_deepsets':  # TODO: fails as d3rlpy approach
-        model = PPO_DeepSets(env=env, num_envs=8, num_steps=100, n_minibatches=8, tensorboard_log=tensorboard_log)
+    elif alg == 'ppo_deepsets':
+        model = PPO_DeepSets(env, num_steps=100, n_minibatches=8, ent_coef=0.001, tensorboard_log=None, seed=2)
     else:
         logging.info('Invalid algorithm!')
 
@@ -72,7 +71,8 @@ def get_load_model(alg, tensorboard_log, load_path):
 def get_env(env_name, reward_function):
     env = 0
     if env_name == "karmada":
-        env = KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100, call_duration_r=1, episode_length=100)
+        env = KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100, call_duration_r=1,
+                                   episode_length=100, reward_function=reward_function)
         # For faster training!
         # otherwise just comment the following lines
         _, _, _, info = env.step(0)
@@ -82,11 +82,13 @@ def get_env(env_name, reward_function):
                                                           reward_function=reward_function) for i in range(8)])
         env = VecMonitor(env, info_keywords=info_keywords)
     elif env == 'fog':
-        env = FogOrchestrationEnv(n_nodes=4, arrival_rate_r=100, call_duration_r=1, episode_length=100)
+        env = FogOrchestrationEnv(n_nodes=4, arrival_rate_r=100, call_duration_r=1,
+                                  episode_length=100)
         _, _, _, info = env.step(0)
         info_keywords = tuple(info.keys())
         env = SubprocVecEnv([lambda: FogOrchestrationEnv(n_nodes=4, arrival_rate_r=100,
                                                          call_duration_r=1, episode_length=100) for i in range(8)])
+
         env = VecMonitor(env, info_keywords=info_keywords)
 
     else:
@@ -160,8 +162,12 @@ def main():
             model.set_env(env)
             model.learn(total_timesteps=total_steps, tb_log_name=name + "_run", callback=checkpoint_callback)
         else:
-            model = get_model(alg, env, tensorboard_log)
-            model.learn(total_timesteps=total_steps, tb_log_name=name + "_run", callback=checkpoint_callback)
+            if alg == "ppo_deepsets":
+                model = get_model(alg, env, tensorboard_log)
+                model.learn(total_timesteps=total_steps)
+            else:
+                model = get_model(alg, env, tensorboard_log)
+                model.learn(total_timesteps=total_steps, tb_log_name=name + "_run", callback=checkpoint_callback)
 
         model.save(name)
 

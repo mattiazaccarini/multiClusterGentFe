@@ -1,5 +1,6 @@
 import heapq
 import json
+
 import gym
 import numpy as np
 import numpy.typing as npt
@@ -20,6 +21,7 @@ class FogOrchestrationEnv(gym.Env):
 
         # used to build an observation, defined as a matrix having as rows the nodes and columns their associated metrics
         self.observation_space = spaces.Box(low=0, high=1, shape=(n_nodes + 1, 12), dtype=np.float32)
+
         # deploy the service on the 1,2,..., n node or drop it
         self.action_space = spaces.Discrete(n_nodes + 1)
         self.episode_length = episode_length
@@ -167,7 +169,6 @@ class FogOrchestrationEnv(gym.Env):
             ),
             (self.n_nodes + 1, 1),
         )
-
         observation = np.concatenate([observation, cloud_node], axis=0)
         observation = np.concatenate([observation, node_demand], axis=1)
         return observation
@@ -271,7 +272,6 @@ class FogOrchestrationEnv(gym.Env):
             d["latency"] = self.np_random.integers(low=0, high=3)
             d["base"] = "FVE000"
         return d
-
 
     def next_request(self) -> None:
         arrival_time = self.current_time + self.np_random.exponential(scale=1 / self.arrival_rate_r)

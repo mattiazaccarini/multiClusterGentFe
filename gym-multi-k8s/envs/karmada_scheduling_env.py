@@ -267,13 +267,14 @@ class KarmadaSchedulingEnv(gym.Env):
         # Reset Deployment Data
         self.deploymentList = get_c2e_deployment_list()
 
-        # Reset Resources
-        # TODO: Perhaps add Storage as well later
+        # Resource capacity
+        # TODO: Consider Storage as well later?
         self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
         self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
 
-        self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
-        self.allocated_memory = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
+        # Keeps track of allocated resources
+        self.allocated_cpu = self.np_random.uniform(low=0.5, high=2.0, size=self.num_clusters)
+        self.allocated_memory = self.np_random.uniform(low=0.5, high=2.0, size=self.num_clusters)
 
         self.free_cpu = np.zeros(self.num_clusters)
         self.free_memory = np.zeros(self.num_clusters)

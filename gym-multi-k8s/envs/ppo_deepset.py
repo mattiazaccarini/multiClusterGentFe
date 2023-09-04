@@ -2,18 +2,15 @@ import random
 import time
 from typing import Optional, Union
 from abc import ABC, abstractmethod
-import gym
-import gym.spaces
 import numpy as np
 import numpy.typing as npt
 import torch
 import torch.backends.cudnn
 import torch.nn as nn
 import torch.optim as optim
-from stable_baselines3.common.vec_env import VecMonitor
 from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
-from envs.deepSetAgent import DeepSetAgent
+from envs.deep_sets_agent_original import DeepSetAgent
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -46,31 +43,32 @@ class Algorithm(ABC):
         Predict the policy action from an observation
         """
 
+
 # TODO: does not work.
 # borrowed from CleanRL single-file PPO implementation
 class PPO_DeepSets(Algorithm):
     def __init__(
-        self,
-        env: Union[SubprocVecEnv, DummyVecEnv],
-        learning_rate: float = 2.5e-4,
-        anneal_lr: bool = False,
-        num_steps: int = 128,
-        num_envs: int = 8,
-        gae: bool = True,
-        gae_lambda: float = 0.97,
-        gamma: float = 0.95,
-        n_minibatches: int = 4,
-        update_epochs: int = 4,
-        norm_adv: bool = True,
-        clip_coef: float = 0.2,
-        clip_vloss: bool = True,
-        ent_coef: float = 0.01,
-        vf_coef: float = 0.5,
-        max_grad_norm: float = 0.5,
-        target_kl: Optional[float] = None,
-        seed: int = 1,
-        device: str = "cpu",
-        tensorboard_log: str = "./run",
+            self,
+            env: Union[SubprocVecEnv, DummyVecEnv],
+            learning_rate: float = 2.5e-4,
+            anneal_lr: bool = False,
+            num_steps: int = 128,
+            num_envs: int = 8,
+            gae: bool = True,
+            gae_lambda: float = 0.97,
+            gamma: float = 0.95,
+            n_minibatches: int = 4,
+            update_epochs: int = 4,
+            norm_adv: bool = True,
+            clip_coef: float = 0.2,
+            clip_vloss: bool = True,
+            ent_coef: float = 0.01,
+            vf_coef: float = 0.5,
+            max_grad_norm: float = 0.5,
+            target_kl: Optional[float] = None,
+            seed: int = 1,
+            device: str = "cpu",
+            tensorboard_log: str = "./run",
     ):
         super().__init__(env, num_envs, num_steps, n_minibatches, tensorboard_log)
         self.num_envs = num_envs
@@ -133,7 +131,8 @@ class PPO_DeepSets(Algorithm):
         # ALGO Logic: Storage setup
         self.obs = torch.zeros((self.num_steps, self.num_envs) + self.env.observation_space.shape).to(self.device)
         self.actions = torch.zeros((self.num_steps, self.num_envs) + self.env.action_space.shape).to(self.device)
-        self.masks = torch.zeros((self.num_steps, self.num_envs, self.env.action_space.n), dtype=torch.bool).to(self.device)
+        self.masks = torch.zeros((self.num_steps, self.num_envs, self.env.action_space.n), dtype=torch.bool).to(
+            self.device)
         self.logprobs = torch.zeros((self.num_steps, self.num_envs)).to(self.device)
         self.rewards = torch.zeros((self.num_steps, self.num_envs)).to(self.device)
         self.dones = torch.zeros((self.num_steps, self.num_envs)).to(self.device)
@@ -170,7 +169,8 @@ class PPO_DeepSets(Algorithm):
                 # TRY NOT TO MODIFY: execute the enviroment and log data.
                 next_obs, reward, done, info = self.env.step(action.cpu().numpy())
                 self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
-                next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(self.device)
+                next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(
+                    self.device)
                 next_obs, next_done = torch.Tensor(next_obs).to(self.device), torch.Tensor(done).to(self.device)
 
                 for item in info:
