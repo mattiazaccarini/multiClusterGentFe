@@ -73,7 +73,7 @@ class KarmadaSchedulingEnv(gym.Env):
         logging.info("[Init] Env: {} | Version {} |".format(self.name, self.__version__))
 
         # Defined as a matrix having as rows the nodes and columns their associated metrics
-        self.observation_space = spaces.Box(low=0.0, high=6.0, shape=(num_clusters + 1, 8),
+        self.observation_space = spaces.Box(low=0.0, high=6.0, shape=(num_clusters + 2, 8),
                                             dtype=np.float32)
 
         # Action Space
@@ -84,8 +84,9 @@ class KarmadaSchedulingEnv(gym.Env):
         self.action_space = spaces.Discrete(self.num_actions)
 
         # Action and Observation Space
-        logging.info("[Init] Action Space: " + str(self.action_space))
-        logging.info("[Init] Observation Space: " + str(self.observation_space))
+        logging.info("[Init] Action Space: {}".format(self.action_space))
+        logging.info("[Init] Observation Space: {}".format(self.observation_space))
+        logging.info("[Init] Observation Space Shape: {}".format(self.observation_space.shape))
 
         # Setting the experiment based on Cloud2Edge (C2E) deployments
         self.deploymentList = get_c2e_deployment_list()
@@ -452,10 +453,18 @@ class KarmadaSchedulingEnv(gym.Env):
 
     def get_state(self):
         # Get Observation state
-        cluster = np.full((1, 4), -1)
-        observation = np.stack([self.allocated_cpu, self.cpu_capacity,
-                                self.allocated_memory, self.memory_capacity],
+        cluster = np.full(shape=(2, 4), fill_value=-1)
+        # logging.info('[Get State]: cluster: {}'.format(cluster))
+        # logging.info('[Get State]: cluster shape: {}'.format(cluster.shape))
+
+        observation = np.stack([self.allocated_cpu,
+                                self.cpu_capacity,
+                                self.allocated_memory,
+                                self.memory_capacity],
                                axis=1)
+        # logging.info('[Get State]: observation: {}'.format(observation))
+        # logging.info('[Get State]: observation shape: {}'.format(observation.shape))
+
         # Condition the elements in the set with the current node request
         request_demands = np.tile(
             np.array(
@@ -464,12 +473,18 @@ class KarmadaSchedulingEnv(gym.Env):
                  self.deployment_request.memory_request,
                  self.dt]
             ),
-            (self.num_clusters + 1, 1),
+            (self.num_clusters + 2, 1),
         )
+        # logging.info('[Get State]: request demands: {}'.format(request_demands))
+        # logging.info('[Get State]: request demands shape: {}'.format(request_demands.shape))
+
         # TODO: concatenation fails here if + 2 is used in the obs space. It always needs to match!
         observation = np.concatenate([observation, cluster], axis=0)
+        # logging.info('[Get State]: after first concatenation: {}'.format(observation))
+        # logging.info('[Get State]: after first concatenation shape: {}'.format(observation.shape))
         observation = np.concatenate([observation, request_demands], axis=1)
-        # logging.info('[Get Obs State]: obs: {}'.format(observation))
+        # logging.info('[Get State]: after second concatenation: {}'.format(observation))
+        # logging.info('[Get State]: after second concatenation shape: {}'.format(observation.shape))
         return observation
 
     def save_obs_to_csv(self, obs_file, obs, date):
@@ -623,4 +638,5 @@ class KarmadaSchedulingEnv(gym.Env):
             break
 
         self.deployment_request = self.deployment_generator()
-        logging.info('[Next Request]: Name: {} | Replicas: {}'.format(self.deployment_request.name, self.deployment_request.num_replicas))
+        logging.info('[Next Request]: Name: {} | Replicas: {}'.format(self.deployment_request.name,
+                                                                      self.deployment_request.num_replicas))

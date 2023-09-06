@@ -14,14 +14,18 @@ from envs.ppo_deepset import PPO_DeepSets
 logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 parser = argparse.ArgumentParser(description='Run RL Agent!')
-parser.add_argument('--alg', default='mask_ppo',
+parser.add_argument('--alg', default='ppo',
                     help='The algorithm: ["ppo", "recurrent_ppo", "a2c", "mask_ppo", "ppo_deepsets"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada", "fog"]')
 parser.add_argument('--reward', default='risk', help='reward: ["naive", "risk", "binpack"]')
 parser.add_argument('--training', default=True, action="store_true", help='Training mode')
 parser.add_argument('--testing', default=False, action="store_true", help='Testing mode')
 parser.add_argument('--loading', default=False, action="store_true", help='Loading mode')
-parser.add_argument('--load_path', default='logs/model/test.zip', help='Loading path, ex: logs/model/test.zip')
+parser.add_argument('--load_path',
+                    default='results/karmada/risk/'
+                            'ppo_deepsets_mask_env_karmada_reward_risk_totalSteps_500000_run_1/'
+                            'ppo_deepsets_env_karmada_reward_risk_totalSteps_500000.zip',
+                    help='Loading path, ex: logs/model/test.zip')
 parser.add_argument('--test_path', default='logs/model/test.zip', help='Testing path, ex: logs/model/test.zip')
 parser.add_argument('--steps', default=500000, help='Save model after X steps')
 parser.add_argument('--total_steps', default=500000, help='The total number of steps.')

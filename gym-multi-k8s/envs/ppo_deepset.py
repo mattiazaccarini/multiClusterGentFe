@@ -146,7 +146,7 @@ class PPO_DeepSets(Algorithm):
         start_time = time.time()
         next_obs = torch.Tensor(self.env.reset()).to(self.device)
         next_done = torch.zeros(self.num_envs).to(self.device)
-        # next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(self.device)
+        next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(self.device)
         num_updates = total_timesteps // self.batch_size
         episode_rewards = []
 
@@ -161,7 +161,7 @@ class PPO_DeepSets(Algorithm):
                 global_step += 1 * self.num_envs
                 self.obs[step] = next_obs
                 self.dones[step] = next_done
-                # self.masks[step] = next_masks
+                self.masks[step] = next_masks
 
                 # ALGO LOGIC: action logic
                 with torch.no_grad():
