@@ -4,6 +4,8 @@ import operator
 from datetime import datetime
 import heapq
 import time
+import random
+
 import gym
 import numpy as np
 from gym import spaces
@@ -91,16 +93,17 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Resource capacity
         # TODO: Consider Storage as well later?
-        self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
-        self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=num_clusters)
+        self.cpu_capacity = self.np_random.integers(2.0, 6.0, size=num_clusters)
+        self.memory_capacity = self.np_random.integers(2.0, 6.0, size=num_clusters)
 
         # Keeps track of allocated resources
-        self.allocated_cpu = self.np_random.uniform(low=0.5, high=2.0, size=num_clusters)
-        self.allocated_memory = self.np_random.uniform(low=0.5, high=2.0, size=num_clusters)
+        self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=num_clusters)
+        self.allocated_memory = self.np_random.uniform(low=0.0, high=0.2, size=num_clusters)
 
         # Keeps track of Free resources for deployment requests
         self.free_cpu = np.zeros(num_clusters)
         self.free_memory = np.zeros(num_clusters)
+
         for n in range(num_clusters):
             self.free_cpu[n] = self.cpu_capacity[n] - self.allocated_cpu[n]
             self.free_memory[n] = self.memory_capacity[n] - self.allocated_memory[n]
@@ -273,14 +276,22 @@ class KarmadaSchedulingEnv(gym.Env):
         self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
 
         # Keeps track of allocated resources
-        self.allocated_cpu = self.np_random.uniform(low=0.5, high=2.0, size=self.num_clusters)
-        self.allocated_memory = self.np_random.uniform(low=0.5, high=2.0, size=self.num_clusters)
+        self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
+        self.allocated_memory = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
 
         self.free_cpu = np.zeros(self.num_clusters)
         self.free_memory = np.zeros(self.num_clusters)
         for n in range(self.num_clusters):
             self.free_cpu[n] = self.cpu_capacity[n] - self.allocated_cpu[n]
             self.free_memory[n] = self.memory_capacity[n] - self.allocated_memory[n]
+
+        logging.info("[Reset] Resources:")
+        logging.info("[Reset] CPU Capacity: {}".format(self.cpu_capacity))
+        logging.info("[Reset] CPU allocated: {}".format(self.allocated_cpu))
+        logging.info("[Reset] CPU free: {}".format(self.free_cpu))
+        logging.info("[Reset] MEM Capacity: {}".format(self.memory_capacity))
+        logging.info("[Reset] MEM allocated: {}".format(self.allocated_memory))
+        logging.info("[Reset] MEM free: {}".format(self.free_memory))
 
         # Variables for divide strategy
         self.split_number_replicas = np.zeros(self.num_clusters)
@@ -414,7 +425,8 @@ class KarmadaSchedulingEnv(gym.Env):
             n = int(key)
             if num_replicas == 0:
                 break
-            if num_replicas > 0 and min_factor < num_replicas and ((cpu_req * min_factor < value) and (mem_req * min_factor < free_mem[n])):
+            if num_replicas > 0 and min_factor < num_replicas and (
+                    (cpu_req * min_factor < value) and (mem_req * min_factor < free_mem[n])):
                 distribution[n] += min_factor
                 num_replicas -= min_factor
             elif num_replicas > 0 and ((cpu_req < value) and (mem_req < free_mem[n])):
@@ -441,7 +453,8 @@ class KarmadaSchedulingEnv(gym.Env):
     def get_state(self):
         # Get Observation state
         cluster = np.full((1, 4), -1)
-        observation = np.stack([self.allocated_cpu, self.cpu_capacity, self.allocated_memory, self.memory_capacity],
+        observation = np.stack([self.allocated_cpu, self.cpu_capacity,
+                                self.allocated_memory, self.memory_capacity],
                                axis=1)
         # Condition the elements in the set with the current node request
         request_demands = np.tile(
@@ -504,7 +517,7 @@ class KarmadaSchedulingEnv(gym.Env):
     def enqueue_request(self, request: DeploymentRequest) -> None:
         heapq.heappush(self.running_requests, (request.departure_time, request))
 
-    def action_masks(self):
+    def action_masks(self):  # It should be self.num_clusters +2
         valid_actions = np.ones(self.num_clusters + 2, dtype=bool)
         for i in range(self.num_clusters):
             if self.check_if_cluster_is_full_after_full_deployment(i):
@@ -515,7 +528,7 @@ class KarmadaSchedulingEnv(gym.Env):
         # 2 additional actions: Divide and Reject
         valid_actions[self.num_clusters] = True
         valid_actions[self.num_clusters + 1] = True
-        # logging.info('[Action Mask]: Valid actions {} |'.format(valid_actions))
+        logging.info('[Action Mask]: Valid actions {} |'.format(valid_actions))
         return valid_actions
 
     def check_if_cluster_is_full_after_full_deployment(self, action):
@@ -610,15 +623,4 @@ class KarmadaSchedulingEnv(gym.Env):
             break
 
         self.deployment_request = self.deployment_generator()
-        # logging.info('[Next Request]: Name: {} | Replicas {}'.format(self.deployment_request.name, self.deployment_request.num_replicas))
-
-    '''
-    def deployment_list_generator(self, n_deployments: int = 1000) -> None:
-        d = {"deployment_requests": []}
-        for _ in range(n_deployments):
-            d["deployment_requests"].append(self.deployment_generator())
-        json_object = json.dumps(d, indent=1)
-
-        with open("./envs/deployments.json", "w") as f:
-            f.write(json_object)
-    '''
+        logging.info('[Next Request]: Name: {} | Replicas: {}'.format(self.deployment_request.name, self.deployment_request.num_replicas))

@@ -1,9 +1,11 @@
 import random
 import time
+from statistics import mean
 from typing import Optional, Union
 from abc import ABC, abstractmethod
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 import torch
 import torch.backends.cudnn
 import torch.nn as nn
@@ -12,6 +14,7 @@ from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 from envs.deep_sets_agent_original import DeepSetAgent
 from torch.utils.tensorboard import SummaryWriter
+from stable_baselines3.common.utils import safe_mean
 
 
 class Algorithm(ABC):
@@ -68,7 +71,7 @@ class PPO_DeepSets(Algorithm):
             target_kl: Optional[float] = None,
             seed: int = 1,
             device: str = "cpu",
-            tensorboard_log: str = "./run",
+            tensorboard_log: str = "results/karmada/",
     ):
         super().__init__(env, num_envs, num_steps, n_minibatches, tensorboard_log)
         self.num_envs = num_envs
@@ -143,8 +146,9 @@ class PPO_DeepSets(Algorithm):
         start_time = time.time()
         next_obs = torch.Tensor(self.env.reset()).to(self.device)
         next_done = torch.zeros(self.num_envs).to(self.device)
-        next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(self.device)
+        # next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(self.device)
         num_updates = total_timesteps // self.batch_size
+        episode_rewards = []
 
         for update in range(1, num_updates + 1):
             # Annealing the rate if instructed to do so.
@@ -157,11 +161,11 @@ class PPO_DeepSets(Algorithm):
                 global_step += 1 * self.num_envs
                 self.obs[step] = next_obs
                 self.dones[step] = next_done
-                self.masks[step] = next_masks
+                # self.masks[step] = next_masks
 
                 # ALGO LOGIC: action logic
                 with torch.no_grad():
-                    action, logprob, _, value = self.agent.get_action_and_value(next_obs, masks=next_masks)
+                    action, logprob, _, value = self.agent.get_action_and_value(next_obs) # masks=next_masks)
                     self.values[step] = value.flatten()
                 self.actions[step] = action
                 self.logprobs[step] = logprob
@@ -169,15 +173,18 @@ class PPO_DeepSets(Algorithm):
                 # TRY NOT TO MODIFY: execute the enviroment and log data.
                 next_obs, reward, done, info = self.env.step(action.cpu().numpy())
                 self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
-                next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(
-                    self.device)
+                # next_masks = torch.tensor(np.array(self.env.env_method("action_masks")), dtype=torch.bool).to(
+                #           self.device)
                 next_obs, next_done = torch.Tensor(next_obs).to(self.device), torch.Tensor(done).to(self.device)
 
                 for item in info:
                     if "episode" in item.keys():
-                        print(f"global_step: {global_step}, episodic_return={item['episode']['r']}")
+                        episode_rewards.append(item['episode']['r'])
                         self.writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
                         self.writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
+                        self.writer.add_scalar("rollout/ep_rew_mean", safe_mean(episode_rewards), global_step)
+                        print(f"global_step: {global_step}, episodic_return={item['episode']['r']},  "
+                              f"episode_rew_mean={safe_mean(episode_rewards)}")
                         break
 
             # bootstrap value if not done

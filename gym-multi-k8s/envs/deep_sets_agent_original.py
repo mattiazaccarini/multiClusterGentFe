@@ -123,6 +123,7 @@ class DeepSetAgent(nn.Module):
 
     def get_action(self, x: torch.Tensor, masks: Optional[torch.Tensor] = None, deterministic: bool = True) -> torch.Tensor:
         logits = self.actor(x)
+        masks = None
         if masks is not None:
             HUGE_NEG = torch.tensor(-1e8, dtype=logits.dtype)
             logits = torch.where(masks, logits, HUGE_NEG)
@@ -135,6 +136,7 @@ class DeepSetAgent(nn.Module):
         self, x: torch.Tensor, action: Optional[torch.Tensor] = None, masks: Optional[torch.Tensor] = None
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         logits = self.actor(x)
+        masks = None
         if masks is not None:
             HUGE_NEG = torch.tensor(-1e8, dtype=logits.dtype)
             logits = torch.where(masks, logits, HUGE_NEG)
