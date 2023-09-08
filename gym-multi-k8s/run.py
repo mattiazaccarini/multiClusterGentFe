@@ -14,10 +14,12 @@ from envs.ppo_deepset import PPO_DeepSets
 logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 parser = argparse.ArgumentParser(description='Run RL Agent!')
-parser.add_argument('--alg', default='ppo',
-                    help='The algorithm: ["ppo", "recurrent_ppo", "a2c", "mask_ppo", "ppo_deepsets"]')
+parser.add_argument('--alg', default='mask_ppo',
+                    help='The algorithm: ["a2c", "recurrent_ppo", "ppo", "mask_ppo", "ppo_deepsets"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada", "fog"]')
-parser.add_argument('--reward', default='risk', help='reward: ["naive", "risk", "binpack"]')
+parser.add_argument('--num_clusters', default=4, help='num_clusters: 4, 8, etc')
+parser.add_argument('--reward', default='latency', help='reward: ["naive", "risk", "binpack", "latency"]')
+parser.add_argument('--latency_enabled', default=True, action="store_true", help='Consider Latency metrics')
 parser.add_argument('--training', default=True, action="store_true", help='Training mode')
 parser.add_argument('--testing', default=False, action="store_true", help='Testing mode')
 parser.add_argument('--loading', default=False, action="store_true", help='Loading mode')
@@ -71,19 +73,23 @@ def get_load_model(alg, tensorboard_log, load_path):
         logging.info('Invalid algorithm!')
 
 
-def get_env(env_name, reward_function):
+def get_env(env_name, num_clusters, latency_enabled, reward_function):
     envs = 0
     if env_name == "karmada":
-        env = KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100, call_duration_r=1,
-                                   episode_length=100, reward_function=reward_function)
+        env = KarmadaSchedulingEnv(num_clusters=num_clusters, arrival_rate_r=100, call_duration_r=1,
+                                   episode_length=100,
+                                   latency_enabled= latency_enabled,
+                                   reward_function=reward_function)
         # For faster training!
         # otherwise just comment the following lines
         env.reset()
         _, _, _, info = env.step(0)
         info_keywords = tuple(info.keys())
-        env = SubprocVecEnv([lambda: KarmadaSchedulingEnv(num_clusters=4, arrival_rate_r=100,
+        env = SubprocVecEnv([lambda: KarmadaSchedulingEnv(num_clusters=num_clusters, arrival_rate_r=100,
                                                           call_duration_r=1, episode_length=100,
-                                                          reward_function=reward_function) for i in range(8)])
+                                                          latency_enabled= latency_enabled,
+                                                          reward_function=reward_function)
+                             for i in range(8)])
         envs = VecMonitor(env, info_keywords=info_keywords)
 
     elif env_name == 'fog':
@@ -93,7 +99,7 @@ def get_env(env_name, reward_function):
         info_keywords = tuple(info.keys())
         env = SubprocVecEnv(
             [
-                lambda: FogOrchestrationEnv(n_nodes=10, arrival_rate_r=100, call_duration_r=1, episode_length=100,
+                lambda: FogOrchestrationEnv(n_nodes=num_clusters, arrival_rate_r=100, call_duration_r=1, episode_length=100,
                                             seed=2)
                 for i in range(8)
             ]
@@ -146,6 +152,8 @@ def main():
     alg = args.alg
     env_name = args.env_name
     reward = args.reward
+    num_clusters = int(args.num_clusters)
+    latency_enabled = args.latency_enabled
     loading = args.loading
     load_path = args.load_path
     training = args.training
@@ -155,11 +163,12 @@ def main():
     steps = int(args.steps)
     total_steps = int(args.total_steps)
 
-    env = get_env(env_name, reward)
+    env = get_env(env_name, num_clusters, latency_enabled, reward)
 
-    tensorboard_log = "results/" + env_name + "/"
+    tensorboard_log = "results/" + env_name + "/" + reward + "/"
 
-    name = alg + "_env_" + env_name + "_reward_" + reward + "_totalSteps_" + str(total_steps)
+    name = alg + "_env_" + env_name + "_num_clusters_" + str(num_clusters) \
+           + "_reward_" + reward + "_totalSteps_" + str(total_steps)
 
     # callback: does not work with multiple envs
     checkpoint_callback = CheckpointCallback(save_freq=steps, save_path="logs/" + name, name_prefix=name)

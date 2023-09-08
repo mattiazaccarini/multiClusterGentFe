@@ -5,6 +5,7 @@ from datetime import datetime
 import heapq
 import time
 import random
+from statistics import mean
 
 import gym
 import numpy as np
@@ -33,9 +34,8 @@ RISK_THRESHOLD = 0.75
 # avoid under utilization, opposing goal to risk aware
 BINPACK = "binpack"
 
-# Other reward functions to consider:
-# LATENCY = 'latency'
-# COST = 'cost'
+# Latency reward function:
+LATENCY = 'latency'
 
 # DEFAULTS for Env configuration
 DEFAULT_NUM_EPISODE_STEPS = 100
@@ -43,6 +43,13 @@ DEFAULT_NUM_CLUSTERS = 4
 DEFAULT_ARRIVAL_RATE = 100
 DEFAULT_CALL_DURATION = 1
 DEFAULT_REWARD_FUNTION = NAIVE
+DEFAULT_LATENCY_ENABLED = False
+NUM_METRICS_CLUSTER = 4
+NUM_METRICS_REQUEST = 4
+
+# Defaults for latency if enabled
+MIN_DELAY = 1  # corresponds to 1ms
+MAX_DELAY = 500  # corresponds to 500ms
 
 
 class KarmadaSchedulingEnv(gym.Env):
@@ -53,6 +60,7 @@ class KarmadaSchedulingEnv(gym.Env):
                  arrival_rate_r=DEFAULT_ARRIVAL_RATE,
                  call_duration_r=DEFAULT_CALL_DURATION,
                  episode_length=DEFAULT_NUM_EPISODE_STEPS,
+                 latency_enabled=DEFAULT_LATENCY_ENABLED,
                  reward_function=DEFAULT_REWARD_FUNTION):
         # Define action and observation space
 
@@ -60,6 +68,7 @@ class KarmadaSchedulingEnv(gym.Env):
         self.name = "karmada_gym"
         self.__version__ = "0.0.1"
         self.reward_function = reward_function
+        self.latency_enabled = latency_enabled
 
         self.num_clusters = num_clusters
         self.arrival_rate_r = arrival_rate_r
@@ -67,14 +76,42 @@ class KarmadaSchedulingEnv(gym.Env):
         self.episode_length = episode_length
         self.running_requests: list[DeploymentRequest] = []
 
+        # For Latency purposes
+        self.latency_matrix = np.zeros((num_clusters, num_clusters))
+        self.num_metrics_latency = 0
+        self.latency = np.zeros(num_clusters)
+
         self.seed = 42
         self.np_random, seed = seeding.np_random(self.seed)
 
-        logging.info("[Init] Env: {} | Version {} |".format(self.name, self.__version__))
+        logging.info(
+            "[Init] Env: {} | Version {} | Num_Clusters: {} |".format(self.name, self.__version__, num_clusters))
 
         # Defined as a matrix having as rows the nodes and columns their associated metrics
-        self.observation_space = spaces.Box(low=0.0, high=6.0, shape=(num_clusters + 2, 8),
-                                            dtype=np.float32)
+        if self.latency_enabled:  # If latency is enabled
+            logging.info("[Init] Latency enabled...")
+            self.observation_space = spaces.Box(low=0.0,
+                                                high=6.0,
+                                                shape=(num_clusters + 2,
+                                                       NUM_METRICS_CLUSTER + NUM_METRICS_REQUEST + 2),
+                                                dtype=np.float32)
+            for n1 in range(num_clusters):
+                for n2 in range(num_clusters):
+                    if n1 == n2:  # for the same node assume 0
+                        self.latency_matrix[n1][n2] = 0
+                    else:
+                        self.latency_matrix[n1][n2] = self.np_random.integers(low=MIN_DELAY, high=MAX_DELAY)
+
+                self.latency[n1] = mean(self.latency_matrix[n1])
+
+            # logging.info("[Init] Latency Matrix: {}".format(self.latency_matrix))
+            logging.info("[Init] Latency: {}".format(self.latency))
+
+        else:  # If latency is disabled
+            self.observation_space = spaces.Box(low=0.0,
+                                                high=6.0,
+                                                shape=(num_clusters + 2, NUM_METRICS_CLUSTER + NUM_METRICS_REQUEST),
+                                                dtype=np.float32)
 
         # Action Space
         # deploy the service on cluster 1,2,..., n + split replicas + reject it
@@ -252,6 +289,39 @@ class KarmadaSchedulingEnv(gym.Env):
             # reward: r = min_percentage
             # alternative: +1 if percentage is higher than threshold, otherwise -1
             return float("{:.3f}".format(min_percentage))
+        elif self.reward_function == LATENCY:
+            logging.info('[Get Reward] Latency Reward Funtion Selected...')
+            if not self.latency_enabled:
+                raise ValueError("The latency reward function only works if latency is enabled. Please enable it...")
+            if self.penalty:
+                return -1
+            else:  # If not split
+                t = self.deployment_request.latency_threshold
+                if not self.deployment_request.is_deployment_split:
+                    lat = self.latency[self.deployment_request.deployed_cluster]
+                    logging.info('[Get Reward] Latency Reward - Threshold: {} | '
+                                 'latency: {}'.format(t, lat))
+                    if t > lat:
+                        return 1
+                    else:
+                        return -1
+                else:  # If split
+                    div = self.deployment_request.split_clusters
+                    avg_latency = 0
+                    for d in range(len(div)):
+                        # Update latency
+                        avg_latency += self.latency[d] * div[d]
+
+                    avg_latency = avg_latency / self.deployment_request.num_replicas
+
+                    logging.info('[Get Reward] Latency Reward - Divide - Threshold: {} | '
+                                 'latency: {}'.format(t, avg_latency))
+
+                    if t > avg_latency:
+                        return 1
+                    else:
+                        return -1
+
         else:
             logging.info('[Get Reward] Unrecognized reward: {}'.format(self.reward_function))
 
@@ -270,6 +340,19 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Reset Deployment Data
         self.deploymentList = get_c2e_deployment_list()
+
+        # If latency is enabled
+        if self.latency_enabled:
+            logging.info("[Reset] Latency enabled...")
+            for n1 in range(self.num_clusters):
+                for n2 in range(self.num_clusters):
+                    if n1 == n2:  # for the same node assume 0
+                        self.latency_matrix[n1][n2] = 0
+                    else:
+                        self.latency_matrix[n1][n2] = self.np_random.integers(low=MIN_DELAY, high=MAX_DELAY)
+
+                self.latency[n1] = mean(self.latency_matrix[n1])
+            logging.info("[Reset] Latency: {}".format(self.latency))
 
         # Resource capacity
         # TODO: Consider Storage as well later?
@@ -342,6 +425,9 @@ class KarmadaSchedulingEnv(gym.Env):
                 self.free_memory[action] = self.memory_capacity[action] - self.allocated_memory[action]
                 self.enqueue_request(self.deployment_request)
 
+                if self.latency_enabled:
+                    self.increase_latency(action, 1.5)  # 50% increase max
+
         # Divide Strategy selected
         # TODO: define divide strategy based on heuristic
         elif action == self.num_clusters:
@@ -380,6 +466,10 @@ class KarmadaSchedulingEnv(gym.Env):
                         # Update free resources
                         self.free_cpu[d] = self.cpu_capacity[d] - self.allocated_cpu[d]
                         self.free_memory[d] = self.memory_capacity[d] - self.allocated_memory[d]
+
+                        # If latency enabled
+                        if self.latency_enabled:
+                            self.increase_latency(d, 1.1)  # 10% increase max for split
 
                     # logging.info("[Divide] After")
                     # logging.info("[Divide] CPU allocated: {}".format(self.allocated_cpu))
@@ -452,39 +542,64 @@ class KarmadaSchedulingEnv(gym.Env):
             return distribution
 
     def get_state(self):
-        # Get Observation state
-        cluster = np.full(shape=(2, 4), fill_value=-1)
-        # logging.info('[Get State]: cluster: {}'.format(cluster))
-        # logging.info('[Get State]: cluster shape: {}'.format(cluster.shape))
+        if self.latency_enabled:
+            # Get Observation state
+            cluster = np.full(shape=(2, NUM_METRICS_CLUSTER + 1), fill_value=-1)
 
-        observation = np.stack([self.allocated_cpu,
-                                self.cpu_capacity,
-                                self.allocated_memory,
-                                self.memory_capacity],
-                               axis=1)
-        # logging.info('[Get State]: observation: {}'.format(observation))
-        # logging.info('[Get State]: observation shape: {}'.format(observation.shape))
+            observation = np.stack([self.allocated_cpu,
+                                    self.cpu_capacity,
+                                    self.allocated_memory,
+                                    self.memory_capacity,
+                                    self.latency],
+                                   axis=1)
 
-        # Condition the elements in the set with the current node request
-        request_demands = np.tile(
-            np.array(
-                [self.deployment_request.num_replicas,
-                 self.deployment_request.cpu_request,
-                 self.deployment_request.memory_request,
-                 self.dt]
-            ),
-            (self.num_clusters + 2, 1),
-        )
-        # logging.info('[Get State]: request demands: {}'.format(request_demands))
-        # logging.info('[Get State]: request demands shape: {}'.format(request_demands.shape))
+            # Condition the elements in the set with the current node request
+            request_demands = np.tile(
+                np.array(
+                    [self.deployment_request.num_replicas,
+                     self.deployment_request.cpu_request,
+                     self.deployment_request.memory_request,
+                     self.deployment_request.latency_threshold,
+                     self.dt]
+                ),
+                (self.num_clusters + 2, 1),
+            )
+            observation = np.concatenate([observation, cluster], axis=0)
+            observation = np.concatenate([observation, request_demands], axis=1)
 
-        # TODO: concatenation fails here if + 2 is used in the obs space. It always needs to match!
-        observation = np.concatenate([observation, cluster], axis=0)
-        # logging.info('[Get State]: after first concatenation: {}'.format(observation))
-        # logging.info('[Get State]: after first concatenation shape: {}'.format(observation.shape))
-        observation = np.concatenate([observation, request_demands], axis=1)
-        # logging.info('[Get State]: after second concatenation: {}'.format(observation))
-        # logging.info('[Get State]: after second concatenation shape: {}'.format(observation.shape))
+        else:
+            # Get Observation state
+            cluster = np.full(shape=(2, NUM_METRICS_CLUSTER), fill_value=-1)
+            observation = np.stack([self.allocated_cpu,
+                                    self.cpu_capacity,
+                                    self.allocated_memory,
+                                    self.memory_capacity],
+                                   axis=1)
+
+            # Condition the elements in the set with the current node request
+            request_demands = np.tile(
+                np.array(
+                    [self.deployment_request.num_replicas,
+                     self.deployment_request.cpu_request,
+                     self.deployment_request.memory_request,
+                     self.dt]
+                ),
+                (self.num_clusters + 2, 1),
+            )
+
+            observation = np.concatenate([observation, cluster], axis=0)
+            observation = np.concatenate([observation, request_demands], axis=1)
+
+        '''
+        logging.info('[Get State]: cluster: {}'.format(cluster))
+        logging.info('[Get State]: cluster shape: {}'.format(cluster.shape))
+        logging.info('[Get State]: observation: {}'.format(observation))
+        logging.info('[Get State]: observation shape: {}'.format(observation.shape))
+        logging.info('[Get State]: request demands: {}'.format(request_demands))
+        logging.info('[Get State]: request demands shape: {}'.format(request_demands.shape))
+        logging.info('[Get State]: concatenation: {}'.format(observation))
+        logging.info('[Get State]: concatenation shape: {}'.format(observation.shape))
+        '''
         return observation
 
     def save_obs_to_csv(self, obs_file, obs, date):
@@ -569,10 +684,65 @@ class KarmadaSchedulingEnv(gym.Env):
 
         return False
 
+    def increase_latency(self, n, factor):
+        prev = self.latency[n]
+
+        for n2 in range(self.num_clusters):
+            if n == n2:  # for the same node assume 0
+                self.latency_matrix[n][n2] = 0
+            else:
+                low = int(self.latency_matrix[n][n2])
+                high = int(self.latency_matrix[n][n2] * factor)
+                if high > MAX_DELAY:
+                    high = MAX_DELAY
+                if low < MIN_DELAY:
+                    low = MIN_DELAY
+                if low == high and low != MIN_DELAY:
+                    low -= 1
+                if low == high and low == MIN_DELAY:
+                    high += 1
+
+                logging.info("[Increase Latency] n: {} | n2: {} | low: {} | high: {}".format(n+1, n2+1, low, high))
+                self.latency_matrix[n][n2] = self.np_random.integers(low=low, high=high)
+                if self.latency_matrix[n][n2] == 0:
+                    self.latency_matrix[n][n2] += 1
+
+        self.latency[n] = mean(self.latency_matrix[n])
+
+        logging.info("[Increase Latency] cluster: {} | previous latency: {} "
+                     "| updated Latency: {}".format(n + 1, prev, self.latency[n]))
+
+    def decrease_latency(self, n, factor):
+        prev = self.latency[n]
+        for n2 in range(self.num_clusters):
+            if n == n2:  # for the same node assume 0
+                self.latency_matrix[n][n2] = 0
+            else:
+                low = int(self.latency_matrix[n][n2] * factor)
+                high = int(self.latency_matrix[n][n2])
+
+                if low < MIN_DELAY:
+                    low = MIN_DELAY
+                if high > MAX_DELAY:
+                    high = MAX_DELAY
+                if low == high and high != MAX_DELAY:
+                    high += 1
+                if low == high and high == MAX_DELAY:
+                    low -= 1
+
+                logging.info("[Decrease Latency] n: {} | n2: {} | low: {} | high: {}".format(n+1, n2+1, low, high))
+                self.latency_matrix[n][n2] = self.np_random.integers(low=low, high=high)
+                if self.latency_matrix[n][n2] == 0:
+                    self.latency_matrix[n][n2] += 1
+
+        self.latency[n] = mean(self.latency_matrix[n])
+        logging.info("[Decrease Latency] cluster: {} | previous latency: {} "
+                     "| updated Latency: {}".format(n + 1, prev, self.latency[n]))
+
     def dequeue_request(self):
         _, deployment_request = heapq.heappop(self.running_requests)
         # logging.info("[Dequeue] Request {}...".format(deployment_request))
-        # logging.info("[Dequeue] Request will be terminated...")
+        logging.info("[Dequeue] Request will be terminated...")
         # logging.info("[Dequeue] Before: ")
         # logging.info("[Dequeue] CPU allocated: {}".format(self.allocated_cpu))
         # logging.info("[Dequeue] CPU free: {}".format(self.free_cpu))
@@ -592,6 +762,10 @@ class KarmadaSchedulingEnv(gym.Env):
                 # Update free resources
                 self.free_cpu[d] = self.cpu_capacity[d] - self.allocated_cpu[d]
                 self.free_memory[d] = self.memory_capacity[d] - self.allocated_memory[d]
+
+                # Decrease Latency if replicas were there and latency enabled
+                if self.latency_enabled and total_cpu != 0:
+                    self.decrease_latency(d, 0.9)  # only 10% max if split
         else:
             # logging.info("[Dequeue] Deployment is not split...")
             n = deployment_request.deployed_cluster
@@ -605,6 +779,10 @@ class KarmadaSchedulingEnv(gym.Env):
             # Update free resources
             self.free_cpu[n] = self.cpu_capacity[n] - self.allocated_cpu[n]
             self.free_memory[n] = self.memory_capacity[n] - self.allocated_memory[n]
+
+            # Decrease Latency if latency enabled
+            if self.latency_enabled:
+                self.decrease_latency(n, 0.5)  # 50% max reduction
 
         # logging.info("[Dequeue] After: ")
         # logging.info("[Dequeue] CPU allocated: {}".format(self.allocated_cpu))
