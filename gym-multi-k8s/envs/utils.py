@@ -227,15 +227,18 @@ def save_obs_to_csv(file_name, timestamp, num_pods, desired_replicas, cpu_usage,
 '''
 
 
-def save_to_csv(file_name, episode, reward, execution_time):
+def save_to_csv(file_name, episode, reward, ep_block_prob, ep_accepted_requests, avg_latency, execution_time):
     file = open(file_name, 'a+', newline='')  # append
     # file = open(file_name, 'w', newline='')
     with file:
-        fields = ['episode', 'reward', 'execution_time']
+        fields = ['episode', 'reward', 'ep_block_prob', 'ep_accepted_requests', 'avg_latency', 'execution_time']
         writer = csv.DictWriter(file, fieldnames=fields)
         # writer.writeheader()
         writer.writerow(
             {'episode': episode,
              'reward': float("{:.2f}".format(reward)),
+             'ep_block_prob': float("{:.2f}".format(ep_block_prob)),
+             'ep_accepted_requests': float("{:.2f}".format(ep_accepted_requests)),
+             'avg_latency': float("{:.2f}".format(avg_latency)),
              'execution_time': float("{:.2f}".format(execution_time))}
         )
