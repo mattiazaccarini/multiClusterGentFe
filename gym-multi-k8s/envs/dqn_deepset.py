@@ -16,7 +16,7 @@ from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.utils import safe_mean
 
-from ppo_deepset import Algorithm
+from envs.ppo_deepset import Algorithm
 from envs.deep_sets_agent_dqn import DQNDeepSetAgent
 
 
@@ -42,16 +42,19 @@ def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     return max(slope * t + start_e, end_e)
 
 
-class DQN(Algorithm):
+class DQN_DeepSets(Algorithm):
     def __init__(
             self,
             env: Union[SubprocVecEnv, DummyVecEnv],
             seed=1,
             torch_deterministic=True,
+            num_steps: int = 100,
             learning_rate=2.5e-4,
             buffer_size=10000,
             gamma=0.99,
             tau=1.0,
+            num_envs: int = 8,
+            n_minibatches: int = 4,
             target_network_frequency=500,
             batch_size=128,
             start_e=1,
@@ -60,14 +63,16 @@ class DQN(Algorithm):
             learning_starts=10000,
             train_frequency=10,
             device: str = "cpu",
-            tensorboard_log: str = "./run",
+            tensorboard_log: str = "results/karmada/",
     ):
-        super().__init__(env, learning_rate, seed, tensorboard_log)
+        super().__init__(env, num_envs, num_steps, n_minibatches, tensorboard_log)
         self.num_envs = env.num_envs
+        self.num_steps = num_steps
         self.seed = seed
         self.torch_deterministic = torch_deterministic
         self.env = env
         self.learning_rate = learning_rate
+        self.n_minibatches = n_minibatches
         self.buffer_size = buffer_size
         self.gamma = gamma
         self.tau = tau
@@ -209,7 +214,7 @@ class DQN(Algorithm):
             # self.writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
             # self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
             # self.writer.add_scalar("losses/explained_variance", explained_var, global_step)
-            print("FPS:", int(global_step / (time.time() - start_time)))
+            # print("FPS:", int(global_step / (time.time() - start_time)))
             self.writer.add_scalar("charts/FPS", int(global_step / (time.time() - start_time)), global_step)
 
     def predict(self, obs: npt.NDArray, masks: Optional[npt.NDArray] = None) -> npt.NDArray:

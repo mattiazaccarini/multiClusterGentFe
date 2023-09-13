@@ -36,6 +36,15 @@ BINPACK = "binpack"
 
 # Latency reward function:
 LATENCY = 'latency'
+COST = 'cost'
+
+# Cluster Types
+NUM_CLUSTER_TYPES = 5
+CLUSTER_TYPES = [{"edge_tier_1": None, "cpu": None, "mem": None},
+                 {"edge_tier_2": None, "cpu": None, "mem": None},
+                 {"fog_tier_1": None, "cpu": None, "mem": None},
+                 {"fog_tier_2": None, "cpu": None, "mem": None},
+                 {"cloud": None, "cpu": None, "mem": None}]
 
 # DEFAULTS for Env configuration
 DEFAULT_NUM_EPISODE_STEPS = 100
@@ -295,8 +304,7 @@ class KarmadaSchedulingEnv(gym.Env):
                 t = self.deployment_request.latency_threshold
                 if not self.deployment_request.is_deployment_split:
                     lat = self.latency[self.deployment_request.deployed_cluster]
-                    logging.info('[Get Reward] Latency Reward - Threshold: {} | '
-                                 'latency: {}'.format(t, lat))
+                    # logging.info('[Get Reward] Latency Reward - Threshold: {} | latency: {}'.format(t, lat))
                     if t > lat:
                         return 1
                     else:
@@ -310,8 +318,7 @@ class KarmadaSchedulingEnv(gym.Env):
 
                     avg_latency = avg_latency / self.deployment_request.num_replicas
 
-                    logging.info('[Get Reward] Latency Reward - Divide - Threshold: {} | '
-                                 'latency: {}'.format(t, avg_latency))
+                    # logging.info('[Get Reward] Latency Reward - Divide - Threshold: {} | latency: {}'.format(t, avg_latency))
 
                     if t > avg_latency:
                         return 1
@@ -350,7 +357,7 @@ class KarmadaSchedulingEnv(gym.Env):
 
             self.latency[n1] = mean(self.latency_matrix[n1])
 
-        logging.info("[Reset] Latency: {}".format(self.latency))
+        # logging.info("[Reset] Latency: {}".format(self.latency))
 
         # Resource capacity
         # TODO: Consider Storage as well later?
@@ -367,6 +374,7 @@ class KarmadaSchedulingEnv(gym.Env):
             self.free_cpu[n] = self.cpu_capacity[n] - self.allocated_cpu[n]
             self.free_memory[n] = self.memory_capacity[n] - self.allocated_memory[n]
 
+        '''
         logging.info("[Reset] Resources:")
         logging.info("[Reset] CPU Capacity: {}".format(self.cpu_capacity))
         logging.info("[Reset] CPU allocated: {}".format(self.allocated_cpu))
@@ -374,6 +382,7 @@ class KarmadaSchedulingEnv(gym.Env):
         logging.info("[Reset] MEM Capacity: {}".format(self.memory_capacity))
         logging.info("[Reset] MEM allocated: {}".format(self.allocated_memory))
         logging.info("[Reset] MEM free: {}".format(self.free_memory))
+        '''
 
         # Variables for divide strategy
         self.split_number_replicas = np.zeros(self.num_clusters)

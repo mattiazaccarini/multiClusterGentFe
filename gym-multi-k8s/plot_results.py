@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-stats = namedtuple("episode_stats", ["a2c_rewards", "mask_ppo_rewards", "deepsets_rewards",
-                                     "a2c_ep_block_prob", "mask_ppo_ep_block_prob", "deepsets_ep_block_prob",
-                                     "a2c_latency", "mask_ppo_latency", "deepsets_latency",
+stats = namedtuple("episode_stats", ["a2c_rewards", "mask_ppo_rewards", "deepsets_rewards", "deepsets_dqn_rewards",
+                                     "a2c_ep_block_prob", "mask_ppo_ep_block_prob", "deepsets_ep_block_prob", "deepsets_dqn_ep_block_prob",
+                                     "a2c_latency", "mask_ppo_latency", "deepsets_latency", "deepsets_dqn_latency"
                                      ])
 
 
@@ -21,10 +21,15 @@ def plot_stats(figName, stats, smoothing_window=10):
 
     deepsets_rewards = pd.Series(stats.deepsets_rewards).rolling(smoothing_window, min_periods=smoothing_window).mean()
 
+    deepsets_dqn_rewards = pd.Series(stats.deepsets_dqn_rewards).rolling(smoothing_window, min_periods=smoothing_window).mean()
+
     a2c_ep_block_prob = pd.Series(stats.a2c_ep_block_prob).rolling(smoothing_window, min_periods=smoothing_window).mean()
     mask_ppo_ep_block_prob = pd.Series(stats.mask_ppo_ep_block_prob).rolling(smoothing_window,
                                                                  min_periods=smoothing_window).mean()
     deepsets_ep_block_prob = pd.Series(stats.deepsets_ep_block_prob).rolling(smoothing_window, min_periods=smoothing_window).mean()
+
+    deepsets_dqn_ep_block_prob = pd.Series(stats.deepsets_dqn_ep_block_prob).rolling(smoothing_window,
+                                                                         min_periods=smoothing_window).mean()
 
     a2c_latency = pd.Series(stats.a2c_latency).rolling(smoothing_window,
                                                                    min_periods=smoothing_window).mean()
@@ -32,17 +37,16 @@ def plot_stats(figName, stats, smoothing_window=10):
                                                                              min_periods=smoothing_window).mean()
     deepsets_latency = pd.Series(stats.deepsets_latency).rolling(smoothing_window,
                                                    min_periods=smoothing_window).mean()
-
+    deepsets_dqn_latency = pd.Series(stats.deepsets_dqn_latency).rolling(smoothing_window,
+                                                                                     min_periods=smoothing_window).mean()
     fig = plt.figure()
     plt.plot(a2c_rewards, label='A2C')
-    # plt.plot(ppo_sim_rewards, label='PPO (Simulation)')
     plt.plot(mask_ppo_rewards, label='Maskable PPO')
-    # plt.plot(a2c_rewards, label='A2C (Cluster)')
-    # plt.plot(ppo_rewards, label='PPO (Cluster)')
     plt.plot(deepsets_rewards, label='Deepsets PPO')
+    plt.plot(deepsets_dqn_rewards, label='Deepsets DQN')
     plt.xlabel("Episode")
     plt.ylabel("Reward")
-    plt.xlim(100, 1500)
+    plt.xlim(100, 1600)
     plt.ylim(0, 100)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
@@ -50,14 +54,12 @@ def plot_stats(figName, stats, smoothing_window=10):
 
     fig = plt.figure()
     plt.plot(a2c_ep_block_prob, label='A2C')
-    # plt.plot(ppo_sim_rewards, label='PPO (Simulation)')
     plt.plot(mask_ppo_ep_block_prob, label='Maskable PPO')
-    # plt.plot(a2c_rewards, label='A2C (Cluster)')
-    # plt.plot(ppo_rewards, label='PPO (Cluster)')
     plt.plot(deepsets_ep_block_prob, label='Deepsets PPO')
+    plt.plot(deepsets_dqn_ep_block_prob, label='Deepsets DQN')
     plt.xlabel("Episode")
     plt.ylabel("Percentage of Rejected Requests")
-    plt.xlim(100, 1500)
+    plt.xlim(100, 1600)
     plt.ylim(0, 1)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
@@ -70,9 +72,10 @@ def plot_stats(figName, stats, smoothing_window=10):
     # plt.plot(a2c_rewards, label='A2C (Cluster)')
     # plt.plot(ppo_rewards, label='PPO (Cluster)')
     plt.plot(deepsets_latency, label='Deepsets PPO')
+    plt.plot(deepsets_dqn_latency, label='Deepsets DQN')
     plt.xlabel("Episode")
     plt.ylabel("Avg. Latency (in ms)")
-    plt.xlim(100, 1500)
+    plt.xlim(100, 1600)
     plt.ylim(0, 300)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
@@ -119,38 +122,46 @@ def remove_empty_lines(df):
 
 
 if __name__ == "__main__":
-    file_a2c = "results/karmada/risk/" \
-               "a2c_env_karmada_num_clusters_4_reward_risk_totalSteps_200000_run_1" \
+    file_a2c = "results/karmada/latency/" \
+               "a2c_env_karmada_num_clusters_4_reward_latency_totalSteps_500000_run_1" \
                "/karmada_gym_results.csv"
-    file_mask_ppo = "results/karmada/risk/" \
-                    "mask_ppo_env_karmada_num_clusters_4_reward_risk_totalSteps_200000_run_1" \
+    file_mask_ppo = "results/karmada/latency/" \
+                    "mask_ppo_env_karmada_num_clusters_4_reward_latency_totalSteps_500000_run_1" \
                     "/karmada_gym_results.csv"
-    file_deepsets_ppo = "results/karmada/risk/" \
-                        "ppo_deepsets_env_karmada_num_clusters_4_reward_risk_totalSteps_500000_run_1" \
+    file_deepsets_ppo = "results/karmada/latency/" \
+                        "ppo_deepsets_env_karmada_num_clusters_4_reward_latency_totalSteps_500000_run_1" \
+                        "/karmada_gym_results.csv"
+    file_deepsets_dqn = "results/karmada/latency/" \
+                        "dqn_deepsets_env_karmada_num_clusters_4_reward_latency_totalSteps_200000_run_1" \
                         "/karmada_gym_results.csv"
 
     # df_ppo = pd.read_csv(file_ppo)
     df_a2c = pd.read_csv(file_a2c)
     df_mask_ppo = pd.read_csv(file_mask_ppo)
     df_deepsets_ppo = pd.read_csv(file_deepsets_ppo)
+    df_deepsets_dqn = pd.read_csv(file_deepsets_dqn)
 
     # remove_empty_lines(df_a2c)
     # remove_empty_lines(df_mask_ppo)
     # remove_empty_lines(df_deepsets_ppo)
+    # remove_empty_lines(df_deepsets_dqn)
 
     stats = stats(
         a2c_rewards=df_a2c['reward'],
         mask_ppo_rewards=df_mask_ppo['reward'],
         deepsets_rewards=df_deepsets_ppo['reward'],
+        deepsets_dqn_rewards= df_deepsets_dqn['reward'],
         a2c_ep_block_prob=df_a2c['ep_block_prob'],
         mask_ppo_ep_block_prob=df_mask_ppo['ep_block_prob'],
         deepsets_ep_block_prob=df_deepsets_ppo['ep_block_prob'],
+        deepsets_dqn_ep_block_prob=df_deepsets_dqn['ep_block_prob'],
         a2c_latency=df_a2c['avg_latency'],
         mask_ppo_latency=df_mask_ppo['avg_latency'],
         deepsets_latency=df_deepsets_ppo['avg_latency'],
+        deepsets_dqn_latency=df_deepsets_dqn['avg_latency'],
     )
 
-    plot_stats("karmada_risk", stats, 100)
+    plot_stats("karmada_latency", stats, 100)
 
     '''
     file = "testing/onlineboutique/latency/real/rppo/results.csv"
@@ -189,3 +200,13 @@ if __name__ == "__main__":
 
     print("deepsets_ppo execution_time Mean: " + str(np.mean(df["executionTime"])))
     print("deepsets_ppo execution_time Std: " + str(np.std(df["executionTime"])))
+
+    df = df_deepsets_dqn
+    print("deepsets_dqn reward Mean: " + str(np.mean(df["reward"])))
+    print("deepsets_dqn reward Std: " + str(np.std(df["reward"])))
+
+    print("deepsets_dqn avg_latency Mean: " + str(np.mean(df["avg_latency"])))
+    print("deepsets_dqn avg_latency Std: " + str(np.std(df["avg_latency"])))
+
+    print("deepsets_dqn execution_time Mean: " + str(np.mean(df["executionTime"])))
+    print("deepsets_dqn execution_time Std: " + str(np.std(df["executionTime"])))

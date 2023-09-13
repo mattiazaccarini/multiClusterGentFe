@@ -9,13 +9,14 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from envs.karmada_scheduling_env import KarmadaSchedulingEnv
 from envs.fog_env import FogOrchestrationEnv
 from envs.ppo_deepset import PPO_DeepSets
+from envs.dqn_deepset import DQN_DeepSets
 
 # Logging
 logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 parser = argparse.ArgumentParser(description='Run RL Agent!')
-parser.add_argument('--alg', default='ppo_deepsets',
-                    help='The algorithm: ["a2c", "recurrent_ppo", "ppo", "mask_ppo", "ppo_deepsets"]')
+parser.add_argument('--alg', default='dqn_deepsets',
+                    help='The algorithm: ["a2c", "recurrent_ppo", "ppo", "mask_ppo", "ppo_deepsets", "dqn_deepsets"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada", "fog"]')
 parser.add_argument('--num_clusters', default=4, help='num_clusters: 4, 8, etc')
 parser.add_argument('--reward', default='latency', help='reward: ["naive", "risk", "binpack", "latency"]')
@@ -28,8 +29,8 @@ parser.add_argument('--load_path',
                             'ppo_deepsets_env_karmada_reward_risk_totalSteps_500000.zip',
                     help='Loading path, ex: logs/model/test.zip')
 parser.add_argument('--test_path', default='logs/model/test.zip', help='Testing path, ex: logs/model/test.zip')
-parser.add_argument('--steps', default=500000, help='Save model after X steps')
-parser.add_argument('--total_steps', default=500000, help='The total number of steps.')
+parser.add_argument('--steps', default=100000, help='Save model after X steps')
+parser.add_argument('--total_steps', default=200000, help='The total number of steps.')
 
 # TODO: add other arguments if needed
 # parser.add_argument('--k8s', default=False, action="store_true", help='K8s mode')
@@ -50,6 +51,8 @@ def get_model(alg, env, tensorboard_log):
         model = MaskablePPO("MlpPolicy", env, gamma=0.95, verbose=1, tensorboard_log=tensorboard_log)  # , n_steps=steps
     elif alg == 'ppo_deepsets':
         model = PPO_DeepSets(env, num_steps=100, n_minibatches=8, ent_coef=0.001, tensorboard_log=None, seed=2)
+    elif alg == 'dqn_deepsets':
+        model = DQN_DeepSets(env, num_steps=100, n_minibatches=8, tensorboard_log=None)
     else:
         logging.info('Invalid algorithm!')
 
@@ -177,7 +180,7 @@ def main():
             model.set_env(env)
             model.learn(total_timesteps=total_steps, tb_log_name=name + "_run", callback=checkpoint_callback)
         else:
-            if alg == "ppo_deepsets":
+            if alg == "ppo_deepsets" or alg == 'dqn_deepsets':
                 model = get_model(alg, env, tensorboard_log)
                 model.learn(total_timesteps=total_steps)
             else:
