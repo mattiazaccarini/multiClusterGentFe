@@ -11,7 +11,7 @@ import gym
 import numpy as np
 from gym import spaces
 from gym.utils import seeding
-from envs.utils import DeploymentRequest, Cluster, get_c2e_deployment_list, save_to_csv, sort_dict_by_value
+from envs.utils import DeploymentRequest, get_c2e_deployment_list, save_to_csv, sort_dict_by_value
 import logging
 
 # MAX Number of Replicas per deployment request
@@ -36,15 +36,18 @@ BINPACK = "binpack"
 
 # Latency reward function:
 LATENCY = 'latency'
+
+# Cost reward function:
 COST = 'cost'
+MAX_COST = 16  # Defined based on the max cost in DEFAULT_CLUSTER_TYPES
 
 # Cluster Types
 NUM_CLUSTER_TYPES = 5
-CLUSTER_TYPES = [{"edge_tier_1": None, "cpu": None, "mem": None},
-                 {"edge_tier_2": None, "cpu": None, "mem": None},
-                 {"fog_tier_1": None, "cpu": None, "mem": None},
-                 {"fog_tier_2": None, "cpu": None, "mem": None},
-                 {"cloud": None, "cpu": None, "mem": None}]
+DEFAULT_CLUSTER_TYPES = [{"type": "edge_tier_1", "cpu": 2.0, "mem": 2.0, "cost": 1},
+                         {"type": "edge_tier_2", "cpu": 2.0, "mem": 4.0, "cost": 2},
+                         {"type": "fog_tier_1", "cpu": 2.0, "mem": 8.0, "cost": 4},
+                         {"type": "fog_tier_2", "cpu": 4.0, "mem": 16.0, "cost": 8},
+                         {"type": "cloud", "cpu": 8.0, "mem": 32.0, "cost": 16}]
 
 # DEFAULTS for Env configuration
 DEFAULT_NUM_EPISODE_STEPS = 100
@@ -95,7 +98,7 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Defined as a matrix having as rows the nodes and columns their associated metrics
         self.observation_space = spaces.Box(low=0.0,
-                                            high=6.0,
+                                            high=32.0,
                                             shape=(num_clusters + 2, NUM_METRICS_CLUSTER + NUM_METRICS_REQUEST + 2),
                                             dtype=np.float32)
 
@@ -108,8 +111,8 @@ class KarmadaSchedulingEnv(gym.Env):
 
             self.latency[n1] = mean(self.latency_matrix[n1])
 
-        logging.info("[Init] Latency Matrix: {}".format(self.latency_matrix))
-        logging.info("[Init] Latency: {}".format(self.latency))
+        # logging.info("[Init] Latency Matrix: {}".format(self.latency_matrix))
+        # logging.info("[Init] Latency: {}".format(self.latency))
 
         # Action Space
         # deploy the service on cluster 1,2,..., n + split replicas + reject it
@@ -121,16 +124,31 @@ class KarmadaSchedulingEnv(gym.Env):
         # Action and Observation Space
         logging.info("[Init] Action Space: {}".format(self.action_space))
         logging.info("[Init] Observation Space: {}".format(self.observation_space))
-        logging.info("[Init] Observation Space Shape: {}".format(self.observation_space.shape))
+        # logging.info("[Init] Observation Space Shape: {}".format(self.observation_space.shape))
 
         # Setting the experiment based on Cloud2Edge (C2E) deployments
         self.deploymentList = get_c2e_deployment_list()
         self.deployment_request = None
 
-        # Resource capacity
-        # TODO: Consider Storage as well later?
-        self.cpu_capacity = self.np_random.integers(2.0, 6.0, size=num_clusters)
-        self.memory_capacity = self.np_random.integers(2.0, 6.0, size=num_clusters)
+        # New: Resource capacities based on cluster type
+        self.cpu_capacity = np.zeros(num_clusters)
+        self.memory_capacity = np.zeros(num_clusters)
+        self.cluster_type = [0] * num_clusters # np.zeros(num_clusters)
+
+        logging.info("[Init] Resource Capacity calculation... ")
+        for c in range(num_clusters):
+            type = int(self.np_random.integers(low=0, high=NUM_CLUSTER_TYPES))
+            self.cluster_type[c] = type
+            self.cpu_capacity[c] = DEFAULT_CLUSTER_TYPES[type]['cpu']
+            self.memory_capacity[c] = DEFAULT_CLUSTER_TYPES[type]['mem']
+            logging.info("[Init] Cluster id: {} | Type: {} | cpu: {} | mem: {}".format(c + 1,
+                                                                                       DEFAULT_CLUSTER_TYPES[type][
+                                                                                           'type'],
+                                                                                       self.cpu_capacity[c],
+                                                                                       self.memory_capacity[c]))
+        # previous way
+        # self.cpu_capacity = self.np_random.integers(2.0, 6.0, size=num_clusters)
+        # self.memory_capacity = self.np_random.integers(2.0, 6.0, size=num_clusters)
 
         # Keeps track of allocated resources
         self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=num_clusters)
@@ -155,6 +173,7 @@ class KarmadaSchedulingEnv(gym.Env):
         logging.info("[Init] MEM Capacity: {}".format(self.memory_capacity))
         logging.info("[Init] MEM allocated: {}".format(self.allocated_memory))
         logging.info("[Init] MEM free: {}".format(self.free_memory))
+        logging.info("[Init] Cluster Types: {}".format(self.cluster_type))
 
         # Current Step
         self.current_step = 0
@@ -173,6 +192,7 @@ class KarmadaSchedulingEnv(gym.Env):
         self.block_prob = 0
         self.ep_block_prob = 0
         self.avg_latency = []
+        self.avg_cost = []
 
         self.time_start = 0
         self.execution_time = 0
@@ -233,7 +253,9 @@ class KarmadaSchedulingEnv(gym.Env):
             save_to_csv(self.file_results, self.episode_count,
                         self.total_reward, self.ep_block_prob,
                         self.ep_accepted_requests,
-                        mean(self.avg_latency), self.execution_time)
+                        mean(self.avg_latency),
+                        mean(self.avg_cost),
+                        self.execution_time)
 
         # return ob, reward, self.episode_over, self.info
         return np.array(ob), reward, self.episode_over, self.info
@@ -246,6 +268,8 @@ class KarmadaSchedulingEnv(gym.Env):
                 return -1
             else:
                 return 1
+
+        # Risk-Aware Reward Function
         elif self.reward_function == RISK_AWARE:
             if self.penalty:
                 return -1
@@ -274,6 +298,8 @@ class KarmadaSchedulingEnv(gym.Env):
                     return -1
                 else:
                     return 1
+
+        # Binpack Reward Function
         elif self.reward_function == BINPACK:  # It results in very low rewards based on the simulation dynamics
             logging.info('[Get Reward] Binpack Function Selected...')
             min_percentage = 1  # start as maximum
@@ -296,35 +322,42 @@ class KarmadaSchedulingEnv(gym.Env):
             # reward: r = min_percentage
             # alternative: +1 if percentage is higher than threshold, otherwise -1
             return float("{:.3f}".format(min_percentage))
+
+        # Latency Reward Function
         elif self.reward_function == LATENCY:
             logging.info('[Get Reward] Latency Reward Funtion Selected...')
             if self.penalty:
                 return -1
-            else:  # If not split
+            else:  # If deployment is not split
                 t = self.deployment_request.latency_threshold
+                lat = 0
                 if not self.deployment_request.is_deployment_split:
                     lat = self.latency[self.deployment_request.deployed_cluster]
-                    # logging.info('[Get Reward] Latency Reward - Threshold: {} | latency: {}'.format(t, lat))
-                    if t > lat:
-                        return 1
-                    else:
-                        return -1
-                else:  # If split
-                    div = self.deployment_request.split_clusters
-                    avg_latency = 0
-                    for d in range(len(div)):
-                        # Update latency
-                        avg_latency += self.latency[d] * div[d]
+                    logging.info('[Get Reward] Latency Reward All - Threshold: {} | latency: {}'.format(t, lat))
 
-                    avg_latency = avg_latency / self.deployment_request.num_replicas
+                else:  # If deployment is split
+                    lat = self.deployment_request.expected_latency
+                    logging.info('[Get Reward] Latency Reward Divide - Threshold: {} | latency: {}'.format(t, lat))
 
-                    # logging.info('[Get Reward] Latency Reward - Divide - Threshold: {} | latency: {}'.format(t, avg_latency))
+                if t > lat:
+                    return 1
+                else:
+                    return -1
+        elif self.reward_function == COST:
+            logging.info('[Get Reward] Cost Reward Funtion Selected...')
+            if self.penalty:
+                return -1
+            else:  # If deployment is not split
+                if not self.deployment_request.is_deployment_split:
+                    c = self.deployment_request.deployed_cluster
+                    type_id = self.cluster_type[c]
+                    cost = DEFAULT_CLUSTER_TYPES[type_id]['cost']
+                    logging.info('[Get Reward] Cost Reward All - type_id {} - cost: {}'.format(type_id, cost))
+                else:  # If deployment is split
+                    cost = self.deployment_request.expected_cost
+                    logging.info('[Get Reward] Cost Reward Divide - cost: {}'.format(cost))
 
-                    if t > avg_latency:
-                        return 1
-                    else:
-                        return -1
-
+                return float("{:.2f}".format(MAX_COST - cost))
         else:
             logging.info('[Get Reward] Unrecognized reward: {}'.format(self.reward_function))
 
@@ -344,6 +377,7 @@ class KarmadaSchedulingEnv(gym.Env):
         self.block_prob = 0
         self.ep_block_prob = 0
         self.avg_latency = []
+        self.avg_cost = []
 
         # Reset Deployment Data
         self.deploymentList = get_c2e_deployment_list()
@@ -357,12 +391,19 @@ class KarmadaSchedulingEnv(gym.Env):
 
             self.latency[n1] = mean(self.latency_matrix[n1])
 
-        # logging.info("[Reset] Latency: {}".format(self.latency))
+        logging.info("[Reset] Resource Capacity calculation... ")
+        self.cluster_type = [0] * self.num_clusters  # np.zeros(num_clusters)
 
-        # Resource capacity
-        # TODO: Consider Storage as well later?
-        self.cpu_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
-        self.memory_capacity = self.np_random.integers(low=2.0, high=6.0, size=self.num_clusters)
+        for c in range(self.num_clusters):
+            type = int(self.np_random.integers(low=0, high=NUM_CLUSTER_TYPES))
+            self.cluster_type[c] = type
+            self.cpu_capacity[c] = DEFAULT_CLUSTER_TYPES[type]['cpu']
+            self.memory_capacity[c] = DEFAULT_CLUSTER_TYPES[type]['mem']
+            logging.info("[Init] Cluster id: {} | Type: {} | cpu: {} | mem: {}".format(c + 1,
+                                                                                       DEFAULT_CLUSTER_TYPES[type][
+                                                                                           'type'],
+                                                                                       self.cpu_capacity[c],
+                                                                                       self.memory_capacity[c]))
 
         # Keeps track of allocated resources
         self.allocated_cpu = self.np_random.uniform(low=0.0, high=0.2, size=self.num_clusters)
@@ -432,9 +473,15 @@ class KarmadaSchedulingEnv(gym.Env):
                 self.free_memory[action] = self.memory_capacity[action] - self.allocated_memory[action]
                 self.enqueue_request(self.deployment_request)
 
-                # Latency updates
+                # Latency and Cost updates
                 self.increase_latency(action, 1.5)  # 50% increase max
                 self.avg_latency.append(self.latency[action])
+                type_id = self.cluster_type[action]
+                self.avg_cost.append(DEFAULT_CLUSTER_TYPES[type_id]['cost'])
+
+                # Save expected latency and cost in deployment request
+                self.deployment_request.expected_latency = self.latency[action]
+                self.deployment_request.expected_cost = DEFAULT_CLUSTER_TYPES[type_id]['cost']
 
         # Divide Strategy selected
         # TODO: define divide strategy based on heuristic
@@ -466,8 +513,9 @@ class KarmadaSchedulingEnv(gym.Env):
                     # logging.info("[Divide] MEM allocated: {}".format(self.allocated_memory))
                     # logging.info("[Divide] MEM free: {}".format(self.free_memory))
 
-                    avg = 0
-                    c = 0
+                    avg_l = 0
+                    avg_c = 0
+                    clusters = 0
                     for d in range(len(div)):
                         # Update allocated amounts
                         self.allocated_cpu[d] += self.deployment_request.cpu_request * div[d]
@@ -478,12 +526,25 @@ class KarmadaSchedulingEnv(gym.Env):
                         self.free_memory[d] = self.memory_capacity[d] - self.allocated_memory[d]
 
                         # Latency updates
-                        avg += self.latency[d]
-                        c += 1
+                        avg_l += self.latency[d] * div[d]
                         self.increase_latency(d, 1.1)  # 10% increase max for split
 
-                    self.avg_latency.append(avg/c)
-                    logging.info("[Divide] Average Latency: {}".format(avg/c))
+                        # Cost Updates
+                        type_id = int(self.cluster_type[d])
+                        avg_c += DEFAULT_CLUSTER_TYPES[type_id]['cost'] * div[d]
+
+                    avg_l = avg_l / self.deployment_request.num_replicas
+                    avg_c = avg_c / self.deployment_request.num_replicas
+
+                    self.avg_latency.append(avg_l)
+                    self.avg_cost.append(avg_c)
+                    logging.info("[Divide] Average Latency: {}".format(avg_l))
+                    logging.info("[Divide] Average Cost: {}".format(avg_c))
+
+                    # Save expected latency and cost in deployment request
+                    self.deployment_request.expected_latency = avg_l
+                    self.deployment_request.expected_cost = avg_c
+
                     # logging.info("[Divide] After")
                     # logging.info("[Divide] CPU allocated: {}".format(self.allocated_cpu))
                     # logging.info("[Divide] CPU free: {}".format(self.free_cpu))
@@ -563,16 +624,16 @@ class KarmadaSchedulingEnv(gym.Env):
                                 self.allocated_memory,
                                 self.memory_capacity,
                                 self.latency],
-                                axis=1)
+                               axis=1)
 
         # Condition the elements in the set with the current node request
         request_demands = np.tile(
             np.array(
                 [self.deployment_request.num_replicas,
-                self.deployment_request.cpu_request,
-                self.deployment_request.memory_request,
-                self.deployment_request.latency_threshold,
-                self.dt]
+                 self.deployment_request.cpu_request,
+                 self.deployment_request.memory_request,
+                 self.deployment_request.latency_threshold,
+                 self.dt]
             ),
             (self.num_clusters + 2, 1),
         )
@@ -691,16 +752,18 @@ class KarmadaSchedulingEnv(gym.Env):
                 if low == high and low == MIN_DELAY:
                     high += 1
 
-                logging.info("[Increase Latency] n: {} | n2: {} | low: {} | high: {}".format(n + 1, n2 + 1, low, high))
                 self.latency_matrix[n][n2] = self.np_random.integers(low=low, high=high)
+                logging.info("[Increase Latency] n: {} | n2: {} | low: {} "
+                             "| high: {} | random: {}".format(n + 1, n2 + 1, low, high, self.latency_matrix[n][n2]))
+
                 if self.latency_matrix[n][n2] == 0:
                     self.latency_matrix[n][n2] += 1
 
                 self.latency_matrix[n2][n] = self.latency_matrix[n][n2]
 
         # Update Latency of all nodes
-        for n in range(self.num_clusters):
-            self.latency[n] = mean(self.latency_matrix[n])
+        for c in range(self.num_clusters):
+            self.latency[c] = mean(self.latency_matrix[c])
 
         logging.info("[Increase Latency] cluster: {} | previous latency: {} "
                      "| updated Latency: {}".format(n + 1, prev, self.latency[n]))
@@ -723,16 +786,21 @@ class KarmadaSchedulingEnv(gym.Env):
                 if low == high and high == MAX_DELAY:
                     low -= 1
 
-                logging.info("[Decrease Latency] n: {} | n2: {} | low: {} | high: {}".format(n + 1, n2 + 1, low, high))
                 self.latency_matrix[n][n2] = self.np_random.integers(low=low, high=high)
+                logging.info(
+                    "[Decrease Latency] n: {} | n2: {} | low: {} | high: {} | random: {}".format(n + 1, n2 + 1, low,
+                                                                                                 high,
+                                                                                                 self.latency_matrix[n][
+                                                                                                     n2]))
+
                 if self.latency_matrix[n][n2] == 0:
                     self.latency_matrix[n][n2] += 1
 
                 self.latency_matrix[n2][n] = self.latency_matrix[n][n2]
 
         # Update Latency of all nodes
-        for n in range(self.num_clusters):
-            self.latency[n] = mean(self.latency_matrix[n])
+        for c in range(self.num_clusters):
+            self.latency[c] = mean(self.latency_matrix[c])
 
         logging.info("[Decrease Latency] cluster: {} | previous latency: {} "
                      "| updated Latency: {}".format(n + 1, prev, self.latency[n]))

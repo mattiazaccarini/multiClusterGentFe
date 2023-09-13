@@ -14,24 +14,13 @@ class DeploymentRequest:
     memory_request: float
     memory_limit: float
     arrival_time: float
-    latency_threshold: int
+    latency_threshold: int  # Latency threshold that should be respected
     departure_time: float
-    deployed_cluster: int = None
-    split_clusters: [] = None
-    is_deployment_split: bool = False
-
-
-@dataclass
-class Cluster:
-    num_nodes: int
-    available_cpu: float
-    available_memory: float
-    # cpu_capacity: float
-    # memory_capacity: float
-    # available_storage: float
-    # storage_capacity: float
-    # bandwidth_matrix: list[int]
-    # latency_matrix: list[int]
+    deployed_cluster: int = None  # All replicas deployed in one cluster
+    is_deployment_split: bool = False  # has the deployment request been split?
+    split_clusters: [] = None  # what is the distribution of the deployment request?
+    expected_latency: int = None  # expected latency after deployment
+    expected_cost: int = None  # expected cost after deployment
 
 
 # NOT used by Karmada Scheduling env!
@@ -227,11 +216,12 @@ def save_obs_to_csv(file_name, timestamp, num_pods, desired_replicas, cpu_usage,
 '''
 
 
-def save_to_csv(file_name, episode, reward, ep_block_prob, ep_accepted_requests, avg_latency, execution_time):
+def save_to_csv(file_name, episode, reward, ep_block_prob, ep_accepted_requests, avg_latency, avg_cost, execution_time):
     file = open(file_name, 'a+', newline='')  # append
     # file = open(file_name, 'w', newline='')
     with file:
-        fields = ['episode', 'reward', 'ep_block_prob', 'ep_accepted_requests', 'avg_latency', 'execution_time']
+        fields = ['episode', 'reward', 'ep_block_prob', 'ep_accepted_requests', 'avg_latency', 'avg_cost',
+                  'execution_time']
         writer = csv.DictWriter(file, fieldnames=fields)
         # writer.writeheader()
         writer.writerow(
@@ -240,5 +230,6 @@ def save_to_csv(file_name, episode, reward, ep_block_prob, ep_accepted_requests,
              'ep_block_prob': float("{:.2f}".format(ep_block_prob)),
              'ep_accepted_requests': float("{:.2f}".format(ep_accepted_requests)),
              'avg_latency': float("{:.2f}".format(avg_latency)),
+             'avg_cost': float("{:.2f}".format(avg_cost)),
              'execution_time': float("{:.2f}".format(execution_time))}
         )

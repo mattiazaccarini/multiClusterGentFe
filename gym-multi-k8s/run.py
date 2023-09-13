@@ -15,21 +15,24 @@ from envs.dqn_deepset import DQN_DeepSets
 logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 parser = argparse.ArgumentParser(description='Run RL Agent!')
-parser.add_argument('--alg', default='dqn_deepsets',
+parser.add_argument('--alg', default='mask_ppo',
                     help='The algorithm: ["a2c", "recurrent_ppo", "ppo", "mask_ppo", "ppo_deepsets", "dqn_deepsets"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada", "fog"]')
 parser.add_argument('--num_clusters', default=4, help='num_clusters: 4, 8, etc')
-parser.add_argument('--reward', default='latency', help='reward: ["naive", "risk", "binpack", "latency"]')
+parser.add_argument('--reward', default='risk', help='reward: ["naive", "risk", "binpack", "latency"]')
 parser.add_argument('--training', default=True, action="store_true", help='Training mode')
 parser.add_argument('--testing', default=False, action="store_true", help='Testing mode')
 parser.add_argument('--loading', default=False, action="store_true", help='Loading mode')
 parser.add_argument('--load_path',
-                    default='results/karmada/risk/'
-                            'ppo_deepsets_mask_env_karmada_reward_risk_totalSteps_500000_run_1/'
-                            'ppo_deepsets_env_karmada_reward_risk_totalSteps_500000.zip',
+                    default='results/karmada/cost/'
+                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000_run_1/'
+                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000.zip',
                     help='Loading path, ex: logs/model/test.zip')
-parser.add_argument('--test_path', default='logs/model/test.zip', help='Testing path, ex: logs/model/test.zip')
-parser.add_argument('--steps', default=100000, help='Save model after X steps')
+parser.add_argument('--test_path', default='results/karmada/cost/'
+                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000_run_1/'
+                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000',
+                    help='Testing path, ex: logs/model/test.zip')
+parser.add_argument('--steps', default=200000, help='Save model after X steps')
 parser.add_argument('--total_steps', default=200000, help='The total number of steps.')
 
 # TODO: add other arguments if needed
@@ -59,7 +62,7 @@ def get_model(alg, env, tensorboard_log):
     return model
 
 
-def get_load_model(alg, tensorboard_log, load_path):
+def get_load_model(env, alg, tensorboard_log, load_path):
     if alg == 'ppo':
         return PPO.load(load_path, reset_num_timesteps=False, verbose=1, tensorboard_log=tensorboard_log, n_steps=500)
     elif alg == 'recurrent_ppo':
@@ -70,7 +73,11 @@ def get_load_model(alg, tensorboard_log, load_path):
     elif alg == 'mask_ppo':
         return MaskablePPO.load(load_path, reset_num_timesteps=False, verbose=1, tensorboard_log=tensorboard_log)
     elif alg == 'ppo_deepsets':
-        return PPO_DeepSets.load(load_path)
+        agent = PPO_DeepSets(env, tensorboard_log=None)
+        return agent.load(f"" + load_path)
+    elif alg == 'dqn_deepsets':
+        agent = DQN_DeepSets(env, tensorboard_log=None)
+        return agent.load(f"" + load_path)
     else:
         logging.info('Invalid algorithm!')
 
@@ -124,7 +131,7 @@ def test_model(model, env, n_episodes, n_steps, smoothing_window, fig_name):
         for _ in range(n_steps):
             action, _ = model.predict(obs)
             obs, reward, done, _ = env.step(action)
-            reward_sum += reward
+            reward_sum += float(reward)
             if done:
                 episode_rewards.append(reward_sum)
                 print("Episode {} | Total reward: {} |".format(e, str(reward_sum)))
@@ -143,7 +150,7 @@ def test_model(model, env, n_episodes, n_steps, smoothing_window, fig_name):
     plt.plot(rewards_smoothed)
     plt.xlabel("Episode")
     plt.ylabel("Reward")
-    plt.savefig('test_results_png/' + fig_name, dpi=250, bbox_inches='tight')
+    plt.savefig(fig_name, dpi=250, bbox_inches='tight')
 
 
 def main():
@@ -191,7 +198,7 @@ def main():
 
     # Testing selected
     if testing:
-        model = get_load_model(alg, tensorboard_log, test_path)
+        model = get_load_model(env, alg, tensorboard_log, test_path)
         test_model(model, env, n_episodes=100, n_steps=110, smoothing_window=5, fig_name=name + "_test_reward.png")
 
 
