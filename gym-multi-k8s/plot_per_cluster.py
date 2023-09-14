@@ -48,7 +48,7 @@ if __name__ == "__main__":
             get_statistics(df, file, avg_reward, ci_avg_reward, avg_latency, avg_cost, ci_avg_cost, avg_executionTime)
 
     fig = plt.figure()
-    x = [4, 8, 12, 16, 32, 64, 128]
+    x = [4, 8, 12, 16, 25, 32, 48, 64, 80, 128]
 
     plt.errorbar(x, avg_reward, yerr=ci_avg_reward, linestyle=None, marker="s", label='Deepsets PPO',
                  markersize=6)
