@@ -10,31 +10,55 @@ env_kwargs = {"n_nodes": 10, "arrival_rate_r": 100, "call_duration_r": 1, "episo
 MONITOR_PATH = f"./results/test/ppo_deepset_{SEED}_n{env_kwargs['n_nodes']}_lam{env_kwargs['arrival_rate_r']}_mu{env_kwargs['call_duration_r']}.monitor.csv"
 
 if __name__ == "__main__":
-    num_clusters = 4
-    env = KarmadaSchedulingEnv(num_clusters=num_clusters, arrival_rate_r=100, call_duration_r=1,
-                                   episode_length=100,
-                                   reward_function='cost')
-    env.reset()
-    _, _, _, info = env.step(0)
-    info_keywords = tuple(info.keys())
+    # Define here variables for testing
+    num_clusters = [4, 8, 12, 16, 25, 32, 48, 64, 80, 128]
+    reward_function = 'latency'
+    alg = 'dqn'
 
-    envs = DummyVecEnv([lambda: KarmadaSchedulingEnv(num_clusters=num_clusters, arrival_rate_r=100, call_duration_r=1,
-                                   episode_length=100,
-                                   reward_function='cost')])
-    envs = VecMonitor(envs, MONITOR_PATH, info_keywords=info_keywords)
+    i = 0
+    for c in num_clusters:
+        env = KarmadaSchedulingEnv(num_clusters=c, arrival_rate_r=100, call_duration_r=1,
+                                   episode_length=100, reward_function=reward_function,
+                                   file_results_name=str(i) + 'karmada_gym_results_num_clusters_' + str(c))
+        env.reset()
+        _, _, _, info = env.step(0)
+        info_keywords = tuple(info.keys())
 
-    agent = PPO_DeepSets(envs, seed=SEED, tensorboard_log=None)
-    # agent = DQN_DeepSets(envs, seed=SEED, tensorboard_log=None)
-    agent.load(f"./results/karmada/cost/ppo_deepsets_env_karmada_num_clusters_4_reward_cost_totalSteps_200000_run_1/"
-               f"ppo_deepsets_env_karmada_num_clusters_4_reward_cost_totalSteps_200000")
+        envs = DummyVecEnv([lambda: KarmadaSchedulingEnv(
+            num_clusters=c,
+            arrival_rate_r=100,
+            call_duration_r=1,
+            episode_length=100,
+            reward_function=reward_function,
+            file_results_name=str(i) + '_karmada_gym_results_num_clusters_' + str(c))
+                            ])
+        envs = VecMonitor(envs, MONITOR_PATH, info_keywords=info_keywords)
 
-    #agent.load(f"./agents/ppo_deepset_{SEED}")
-    for _ in tqdm(range(100)):
-        obs = envs.reset()
-        action_mask = np.array(envs.env_method("action_masks"))
-        done = False
-        while not done:
-            action = agent.predict(obs, action_mask)
-            obs, reward, dones, info = envs.step(action)
+        # PPO or DQN
+        agent = None
+        if alg == "ppo":
+            agent = PPO_DeepSets(envs, seed=SEED, tensorboard_log=None)
+        elif alg == 'dqn':
+            agent = DQN_DeepSets(envs, seed=SEED, tensorboard_log=None)
+        else:
+            print('Invalid algorithm!')
+
+        # Adapt the path accordingly
+        agent.load(f"./results/karmada/"
+                   + reward_function + "/" + alg + "_deepsets_env_karmada_num_clusters_4_reward_"
+                   + reward_function + "_totalSteps_200000_run_1/"
+                   + alg + "_deepsets_env_karmada_num_clusters_4_reward_"
+                   + reward_function + "_totalSteps_200000")
+
+        # Test the agent for 100 episodes
+        for _ in tqdm(range(100)):
+            obs = envs.reset()
             action_mask = np.array(envs.env_method("action_masks"))
-            done = dones[0]
+            done = False
+            while not done:
+                action = agent.predict(obs, action_mask)
+                obs, reward, dones, info = envs.step(action)
+                action_mask = np.array(envs.env_method("action_masks"))
+                done = dones[0]
+
+        i += 1

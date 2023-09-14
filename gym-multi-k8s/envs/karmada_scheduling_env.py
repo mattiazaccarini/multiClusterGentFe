@@ -55,6 +55,7 @@ DEFAULT_NUM_CLUSTERS = 4
 DEFAULT_ARRIVAL_RATE = 100
 DEFAULT_CALL_DURATION = 1
 DEFAULT_REWARD_FUNTION = NAIVE
+DEFAULT_FILE_NAME_RESULTS = "karmada_gym_results"
 NUM_METRICS_CLUSTER = 4
 NUM_METRICS_REQUEST = 4
 
@@ -71,7 +72,9 @@ class KarmadaSchedulingEnv(gym.Env):
                  arrival_rate_r=DEFAULT_ARRIVAL_RATE,
                  call_duration_r=DEFAULT_CALL_DURATION,
                  episode_length=DEFAULT_NUM_EPISODE_STEPS,
-                 reward_function=DEFAULT_REWARD_FUNTION):
+                 reward_function=DEFAULT_REWARD_FUNTION,
+                 file_results_name=DEFAULT_FILE_NAME_RESULTS):
+
         # Define action and observation space
 
         super(KarmadaSchedulingEnv, self).__init__()
@@ -197,7 +200,7 @@ class KarmadaSchedulingEnv(gym.Env):
         self.time_start = 0
         self.execution_time = 0
         self.episode_count = 0
-        self.file_results = self.name + "_results.csv"
+        self.file_results = file_results_name + ".csv"
         self.obs_csv = self.name + "_obs.csv"
 
     def step(self, action):

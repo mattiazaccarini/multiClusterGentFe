@@ -16,21 +16,21 @@ logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 parser = argparse.ArgumentParser(description='Run RL Agent!')
 parser.add_argument('--alg', default='mask_ppo',
-                    help='The algorithm: ["a2c", "recurrent_ppo", "ppo", "mask_ppo", "ppo_deepsets", "dqn_deepsets"]')
+                    help='The algorithm: ["mask_ppo", "recurrent_ppo", "ppo", "mask_ppo", "ppo_deepsets", "dqn_deepsets"]')
 parser.add_argument('--env_name', default='karmada', help='Env: ["karmada", "fog"]')
 parser.add_argument('--num_clusters', default=4, help='num_clusters: 4, 8, etc')
-parser.add_argument('--reward', default='risk', help='reward: ["naive", "risk", "binpack", "latency"]')
-parser.add_argument('--training', default=True, action="store_true", help='Training mode')
-parser.add_argument('--testing', default=False, action="store_true", help='Testing mode')
+parser.add_argument('--reward', default='risk', help='reward: ["naive", "risk", "binpack", "cost", "latency"]')
+parser.add_argument('--training', default=False, action="store_true", help='Training mode')
+parser.add_argument('--testing', default=True, action="store_true", help='Testing mode')
 parser.add_argument('--loading', default=False, action="store_true", help='Loading mode')
 parser.add_argument('--load_path',
-                    default='results/karmada/cost/'
-                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000_run_1/'
-                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000.zip',
+                    default='results/karmada/risk/'
+                            'mask_ppo_env_karmada_num_clusters_4_reward_risk_totalSteps_200000_run_1/'
+                            'mask_ppo_env_karmada_num_clusters_4_reward_risk_totalSteps_200000.zip',
                     help='Loading path, ex: logs/model/test.zip')
-parser.add_argument('--test_path', default='results/karmada/cost/'
-                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000_run_1/'
-                            'mask_ppo_env_karmada_num_clusters_4_reward_cost_totalSteps_200000',
+parser.add_argument('--test_path', default='results/karmada/risk/'
+                                           'mask_ppo_env_karmada_num_clusters_4_reward_risk_totalSteps_200000_run_1/'
+                                           'mask_ppo_env_karmada_num_clusters_4_reward_risk_totalSteps_200000',
                     help='Testing path, ex: logs/model/test.zip')
 parser.add_argument('--steps', default=200000, help='Save model after X steps')
 parser.add_argument('--total_steps', default=200000, help='The total number of steps.')
@@ -85,21 +85,21 @@ def get_load_model(env, alg, tensorboard_log, load_path):
 def get_env(env_name, num_clusters, reward_function):
     envs = 0
     if env_name == "karmada":
-        env = KarmadaSchedulingEnv(num_clusters=num_clusters, arrival_rate_r=100, call_duration_r=1,
-                                   episode_length=100,
-                                   reward_function=reward_function)
+        envs = KarmadaSchedulingEnv(num_clusters=num_clusters, arrival_rate_r=100, call_duration_r=1,
+                                    episode_length=100,
+                                    reward_function=reward_function)
         # For faster training!
         # otherwise just comment the following lines
-        # '''
+        '''
         env.reset()
         _, _, _, info = env.step(0)
         info_keywords = tuple(info.keys())
         env = SubprocVecEnv([lambda: KarmadaSchedulingEnv(num_clusters=num_clusters, arrival_rate_r=100,
                                                           call_duration_r=1, episode_length=100,
-                                                          reward_function=reward_function)
-                             for i in range(8)])
+                                                          reward_function=reward_function)])
+                            # for i in range(8)])
         envs = VecMonitor(env, info_keywords=info_keywords)
-        # '''
+        '''
     elif env_name == 'fog':
         env = FogOrchestrationEnv(10, 100, 1)
         env.reset()
@@ -107,7 +107,8 @@ def get_env(env_name, num_clusters, reward_function):
         info_keywords = tuple(info.keys())
         env = SubprocVecEnv(
             [
-                lambda: FogOrchestrationEnv(n_nodes=num_clusters, arrival_rate_r=100, call_duration_r=1, episode_length=100,
+                lambda: FogOrchestrationEnv(n_nodes=num_clusters, arrival_rate_r=100, call_duration_r=1,
+                                            episode_length=100,
                                             seed=2)
                 for i in range(8)
             ]
