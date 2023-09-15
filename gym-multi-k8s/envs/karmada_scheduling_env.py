@@ -241,11 +241,23 @@ class KarmadaSchedulingEnv(gym.Env):
         self.block_prob = 1 - (self.accepted_requests / self.offered_requests)
         self.ep_block_prob = 1 - (self.ep_accepted_requests / self.current_step)
 
+        if len(self.avg_latency) == 0 and len(self.avg_cost) == 0:
+            avg_c = 1
+            avg_l = 1
+        else:
+            avg_c = mean(self.avg_cost)
+            avg_l = mean(self.avg_latency)
+
         self.info = {
-            "reward": float("{:.2f}".format(reward)),
+            "reward_step": float("{:.2f}".format(reward)),
             "action": float("{:.2f}".format(action)),
-            "block_prob": float("{:.2f}".format(self.block_prob)),
+            # "block_prob": float("{:.2f}".format(self.block_prob)),
+            "reward": float("{:.2f}".format(self.total_reward)),
             "ep_block_prob": float("{:.2f}".format(self.ep_block_prob)),
+            "ep_accepted_requests": float("{:.2f}".format(self.ep_accepted_requests)),
+            'avg_latency': float("{:.2f}".format(avg_l)),
+            'avg_cost': float("{:.2f}".format(avg_c)),
+            'executionTime': float("{:.2f}".format(self.execution_time))
         }
 
         if self.current_step == self.episode_length:

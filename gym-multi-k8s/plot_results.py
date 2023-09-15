@@ -1,6 +1,5 @@
 import logging
 from collections import namedtuple
-
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -59,52 +58,52 @@ def plot_stats(figName, stats, smoothing_window=10):
     plt.plot(deepsets_dqn_rewards, color='#EDB120', label='Deepsets DQN')
     plt.xlabel("Episode")
     plt.ylabel("Reward")
-    plt.xlim(0, 100)
-    plt.ylim(0, 100)
+    plt.xlim(100, 2000)
+    plt.ylim(0, 110)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
     plt.savefig(figName + '_reward.png', dpi=250, bbox_inches='tight')
 
     fig = plt.figure()
-    plt.plot(a2c_ep_block_prob, color='#77AC30',label='A2C')
-    plt.plot(mask_ppo_ep_block_prob, color='#D95319',label='Maskable PPO')
-    plt.plot(deepsets_ep_block_prob, color='#3399FF',label='Deepsets PPO')
+    plt.plot(a2c_ep_block_prob, color='#77AC30', label='A2C')
+    plt.plot(mask_ppo_ep_block_prob, color='#D95319', label='Maskable PPO')
+    plt.plot(deepsets_ep_block_prob, color='#3399FF', label='Deepsets PPO')
     plt.plot(deepsets_dqn_ep_block_prob, color='#EDB120', label='Deepsets DQN')
     plt.xlabel("Episode")
     plt.ylabel("Percentage of Rejected Requests")
-    plt.xlim(0, 100)
+    plt.xlim(100, 2000)
     plt.ylim(0, 1)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
     plt.savefig(figName + '_block_probability.png', dpi=250, bbox_inches='tight')
 
     fig = plt.figure()
-    plt.plot(a2c_latency, color='#77AC30',label='A2C')
+    plt.plot(a2c_latency, color='#77AC30', label='A2C')
     # plt.plot(ppo_sim_rewards, label='PPO (Simulation)')
-    plt.plot(mask_ppo_latency, color='#D95319',label='Maskable PPO')
+    plt.plot(mask_ppo_latency, color='#D95319', label='Maskable PPO')
     # plt.plot(a2c_rewards, label='A2C (Cluster)')
     # plt.plot(ppo_rewards, label='PPO (Cluster)')
     plt.plot(deepsets_latency, color='#3399FF', label='Deepsets PPO')
-    plt.plot(deepsets_dqn_latency, color='#EDB120',label='Deepsets DQN')
+    plt.plot(deepsets_dqn_latency, color='#EDB120', label='Deepsets DQN')
     plt.xlabel("Episode")
     plt.ylabel("Avg. Latency (in ms)")
-    plt.xlim(0, 100)
+    plt.xlim(100, 2000)
     plt.ylim(0, 300)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
     plt.savefig(figName + '_latency.png', dpi=250, bbox_inches='tight')
 
     fig = plt.figure()
-    plt.plot(a2c_cost, color='#77AC30',label='A2C')
+    plt.plot(a2c_cost, color='#77AC30', label='A2C')
     # plt.plot(ppo_sim_rewards, label='PPO (Simulation)')
-    plt.plot(mask_ppo_cost, color='#D95319',label='Maskable PPO')
+    plt.plot(mask_ppo_cost, color='#D95319', label='Maskable PPO')
     # plt.plot(a2c_rewards, label='A2C (Cluster)')
     # plt.plot(ppo_rewards, label='PPO (Cluster)')
     plt.plot(deepsets_cost, color='#3399FF', label='Deepsets PPO')
     plt.plot(deepsets_dqn_cost, color='#EDB120', label='Deepsets DQN')
     plt.xlabel("Episode")
     plt.ylabel("Avg. Cost (in units)")
-    plt.xlim(0, 100)
+    plt.xlim(100, 2000)
     plt.ylim(0, 18)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
@@ -141,6 +140,11 @@ def plot_stats(figName, stats, smoothing_window=10):
     '''
 
 
+def remove_duplicates(df, column_name):
+    modified = df.drop_duplicates(subset=[column_name])
+    modified.to_csv('karmada_gym_results.csv', index=False)
+    return modified
+
 def remove_empty_lines(df):
     print(df.isnull().sum())
     # Droping the empty rows
@@ -162,28 +166,33 @@ def print_statistics(df, alg_name):
 
 
 if __name__ == "__main__":
-    reward = 'risk'  # cost, risk or latency
-    # num_algs = 4
+    reward = 'latency'  # cost, risk or latency
+    window = 100
 
-    '''
-    file_a2c = "results/karmada/" + reward + "/" \
-                                             "a2c_env_karmada_num_clusters_4_reward_" + reward + "_totalSteps_200000_run_1" \
-                                                                                                 "/karmada_gym_results.csv"
-    file_mask_ppo = "results/karmada/" + reward + "/" \
-                                                  "mask_ppo_env_karmada_num_clusters_4_reward_" + reward + "_totalSteps_200000_run_1" \
-                                                                                                           "/karmada_gym_results.csv"
-    file_deepsets_ppo = "results/karmada/" + reward + "/" \
-                                                      "ppo_deepsets_env_karmada_num_clusters_4_reward_" + reward + "_totalSteps_200000_run_1" \
-                                                                                                                   "/karmada_gym_results.csv"
-    file_deepsets_dqn = "results/karmada/" + reward + "/" \
-                                                      "dqn_deepsets_env_karmada_num_clusters_4_reward_" + reward + "_totalSteps_200000_run_1" \
-                                                                                                               "/karmada_gym_results.csv"
-    '''
+    # Training
+    file_a2c = "results/karmada/" \
+               + reward + "/a2c_env_karmada_num_clusters_4_reward_" \
+               + reward + "_totalSteps_200000_run_2/karmada_gym_results.csv"
+
+    file_mask_ppo = "results/karmada/" \
+                    + reward + "/mask_ppo_env_karmada_num_clusters_4_reward_" \
+                    + reward + "_totalSteps_200000_run_2/karmada_gym_results.csv"
+
+    file_deepsets_ppo = "results/karmada/" \
+                        + reward + "/ppo_deepsets_env_karmada_num_clusters_4_reward_" \
+                        + reward + "_totalSteps_200000_run_3/vec_karmada_gym_results_monitor.csv"
+
+    file_deepsets_dqn = "results/karmada/" \
+                        + reward + "/dqn_deepsets_env_karmada_num_clusters_4_reward_" \
+                        + reward + "_totalSteps_200000_run_2/vec_karmada_gym_results_monitor.csv"
+
     # testing
+    '''
     file_a2c = "results/testing/" + reward + "/a2c/karmada_gym_results.csv"
     file_mask_ppo = "results/testing/" + reward + "/mask_ppo/karmada_gym_results.csv"
     file_deepsets_ppo = "results/testing/" + reward + "/ppo_deepsets/0_karmada_gym_results_num_clusters_4.csv"
     file_deepsets_dqn = "results/testing/" + reward + "/dqn_deepsets/0_karmada_gym_results_num_clusters_4.csv"
+    '''
 
     df_a2c = pd.read_csv(file_a2c)
     df_mask_ppo = pd.read_csv(file_mask_ppo)
@@ -194,6 +203,8 @@ if __name__ == "__main__":
     # remove_empty_lines(df_mask_ppo)
     # remove_empty_lines(df_deepsets_ppo)
     # remove_empty_lines(df_deepsets_dqn)
+
+    # remove_duplicates(df_deepsets_dqn, 'episode')
 
     stats = stats(
         a2c_rewards=df_a2c['reward'],
@@ -214,7 +225,7 @@ if __name__ == "__main__":
         deepsets_dqn_cost=df_deepsets_dqn['avg_cost'],
     )
 
-    plot_stats("karmada_testing_" + reward, stats, 5)
+    plot_stats("karmada_training_" + reward, stats, window)
 
     print_statistics(df_a2c, "a2c")
     print_statistics(df_mask_ppo, "mask_ppo")

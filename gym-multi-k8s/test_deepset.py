@@ -46,7 +46,7 @@ if __name__ == "__main__":
         # Adapt the path accordingly
         agent.load(f"./results/karmada/"
                    + reward_function + "/" + alg + "_deepsets_env_karmada_num_clusters_4_reward_"
-                   + reward_function + "_totalSteps_200000_run_1/"
+                   + reward_function + "_totalSteps_200000_run_2/"
                    + alg + "_deepsets_env_karmada_num_clusters_4_reward_"
                    + reward_function + "_totalSteps_200000")
 

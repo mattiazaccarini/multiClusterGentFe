@@ -38,13 +38,13 @@ def get_statistics(df, alg_name, avg_reward, ci_avg_reward, avg_latency, ci_avg_
 
 
 if __name__ == "__main__":
-    reward = 'cost'  # cost, risk or latency
-    max_reward = 1500  # cost= 1500, risk and latency= 100
-    ylim = 1700  # 1700 for cost and 120 for rest
+    reward = 'latency'  # cost, risk or latency
+    max_reward = 100  # cost= 1500, risk and latency= 100
+    ylim = 120  # 1700 for cost and 120 for rest
 
     # testing
-    path_ppo = "results/testing/" + reward + "/ppo_deepsets/"
-    path_dqn = "results/testing/" + reward + "/dqn_deepsets/"
+    path_ppo = "results/testing/run_2/" + reward + "/ppo_deepsets/"
+    path_dqn = "results/testing/run_2/" + reward + "/dqn_deepsets/"
 
     avg_reward_ppo = []
     ci_avg_reward_ppo = []
