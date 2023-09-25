@@ -40,6 +40,7 @@ LATENCY = 'latency'
 # Cost reward function:
 COST = 'cost'
 MAX_COST = 16  # Defined based on the max cost in DEFAULT_CLUSTER_TYPES
+MIN_COST = 1
 
 # Cluster Types
 NUM_CLUSTER_TYPES = 5
@@ -136,7 +137,7 @@ class KarmadaSchedulingEnv(gym.Env):
         # New: Resource capacities based on cluster type
         self.cpu_capacity = np.zeros(num_clusters)
         self.memory_capacity = np.zeros(num_clusters)
-        self.cluster_type = [0] * num_clusters # np.zeros(num_clusters)
+        self.cluster_type = [0] * num_clusters  # np.zeros(num_clusters)
 
         logging.info("[Init] Resource Capacity calculation... ")
         for c in range(num_clusters):
@@ -275,19 +276,33 @@ class KarmadaSchedulingEnv(gym.Env):
         # return ob, reward, self.episode_over, self.info
         return np.array(ob), reward, self.episode_over, self.info
 
-    # TODO: update reward function based on Multi-objective function
+    # TODO: Future work: design reward function based on Multi-Objective Function
     def get_reward(self):
         """ Calculate Rewards """
         if self.reward_function == NAIVE:
             if self.penalty:
-                return -1
+                if not self.check_if_cluster_is_really_full():
+                    logging.info("[Get Reward] Penalty = True, and resources "
+                                 "were available, penalize the agent...")
+                    return -1
+                else:  # agent should not be penalized
+                    logging.info("[Get Reward] Penalty = True, but resources "
+                                 "were not available, do not penalize the agent...")
+                    return 1
             else:
                 return 1
 
         # Risk-Aware Reward Function
         elif self.reward_function == RISK_AWARE:
             if self.penalty:
-                return -1
+                if not self.check_if_cluster_is_really_full():
+                    logging.info("[Get Reward] Penalty = True, and resources "
+                                 "were available, penalize the agent...")
+                    return -1
+                else:  # agent should not be penalized
+                    logging.info("[Get Reward] Penalty = True, but resources "
+                                 "were not available, do not penalize the agent...")
+                    return 1
             else:
                 logging.info('[Get Reward] Risk-aware Function Selected...')
                 max_risk = 0
@@ -316,33 +331,50 @@ class KarmadaSchedulingEnv(gym.Env):
 
         # Binpack Reward Function
         elif self.reward_function == BINPACK:  # It results in very low rewards based on the simulation dynamics
-            logging.info('[Get Reward] Binpack Function Selected...')
-            min_percentage = 1  # start as maximum
-            for n in range(self.num_clusters):
-                # Calculate percentage of allocation for CPU and Memory
-                cpu = self.allocated_cpu[n] / self.cpu_capacity[n]
-                mem = self.allocated_memory[n] / self.memory_capacity[n]
+            if self.penalty:
+                if not self.check_if_cluster_is_really_full():
+                    logging.info("[Get Reward] Penalty = True, and resources "
+                                 "were available, penalize the agent...")
+                    return -1
+                else:  # agent should not be penalized
+                    logging.info("[Get Reward] Penalty = True, but resources "
+                                 "were not available, do not penalize the agent...")
+                    return 1
+            else:
+                logging.info('[Get Reward] Binpack Function Selected...')
+                min_percentage = 1  # start as maximum
+                for n in range(self.num_clusters):
+                    # Calculate percentage of allocation for CPU and Memory
+                    cpu = self.allocated_cpu[n] / self.cpu_capacity[n]
+                    mem = self.allocated_memory[n] / self.memory_capacity[n]
 
-                # Get max Percentage: max or min here?
-                minimum_cluster = max(cpu, mem)
-                logging.info(
-                    '[Get Reward] Cluster: {} | CPU: {} |  '
-                    'Memory : {} | Minimum: {} |'.format(n + 1, cpu, mem, minimum_cluster))
+                    # Get max Percentage: max or min here?
+                    minimum_cluster = max(cpu, mem)
+                    logging.info(
+                        '[Get Reward] Cluster: {} | CPU: {} |  '
+                        'Memory : {} | Minimum: {} |'.format(n + 1, cpu, mem, minimum_cluster))
 
-                # Get the Minimum percentage of allocation across all clusters
-                if minimum_cluster < min_percentage:
-                    min_percentage = minimum_cluster
+                    # Get the Minimum percentage of allocation across all clusters
+                    if minimum_cluster < min_percentage:
+                        min_percentage = minimum_cluster
 
-            logging.info('[Get Reward] Minimum percentage across all clusters: {} |'.format(min_percentage))
-            # reward: r = min_percentage
-            # alternative: +1 if percentage is higher than threshold, otherwise -1
-            return float("{:.3f}".format(min_percentage))
+                logging.info('[Get Reward] Minimum percentage across all clusters: {} |'.format(min_percentage))
+                # reward: r = min_percentage
+                # alternative: +1 if percentage is higher than threshold, otherwise -1
+                return float("{:.3f}".format(min_percentage))
 
         # Latency Reward Function
         elif self.reward_function == LATENCY:
             logging.info('[Get Reward] Latency Reward Funtion Selected...')
             if self.penalty:
-                return -1
+                if not self.check_if_cluster_is_really_full():
+                    logging.info("[Get Reward] Penalty = True, and resources "
+                                 "were available, penalize the agent...")
+                    return -1
+                else:  # agent should not be penalized
+                    logging.info("[Get Reward] Penalty = True, but resources "
+                                 "were not available, do not penalize the agent...")
+                    return 1
             else:  # If deployment is not split
                 t = self.deployment_request.latency_threshold
                 lat = 0
@@ -361,7 +393,14 @@ class KarmadaSchedulingEnv(gym.Env):
         elif self.reward_function == COST:
             logging.info('[Get Reward] Cost Reward Funtion Selected...')
             if self.penalty:
-                return -1
+                if not self.check_if_cluster_is_really_full():
+                    logging.info("[Get Reward] Penalty = True, and resources "
+                                 "were available, penalize the agent...")
+                    return -1
+                else:  # agent should not be penalized
+                    logging.info("[Get Reward] Penalty = True, but resources "
+                                 "were not available, do not penalize the agent...")
+                    return MAX_COST - MIN_COST
             else:  # If deployment is not split
                 if not self.deployment_request.is_deployment_split:
                     c = self.deployment_request.deployed_cluster
@@ -499,7 +538,6 @@ class KarmadaSchedulingEnv(gym.Env):
                 self.deployment_request.expected_cost = DEFAULT_CLUSTER_TYPES[type_id]['cost']
 
         # Divide Strategy selected
-        # TODO: define divide strategy based on heuristic
         elif action == self.num_clusters:
             if self.deployment_request.num_replicas == 1:
                 logging.info('[Take Action] Block Divide strategy since only one replica... ')

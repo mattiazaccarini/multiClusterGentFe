@@ -43,8 +43,10 @@ if __name__ == "__main__":
     ylim = 120  # 1700 for cost and 120 for rest
 
     # testing
-    path_ppo = "results/testing/run_2/" + reward + "/ppo_deepsets/"
-    path_dqn = "results/testing/run_2/" + reward + "/dqn_deepsets/"
+    path_ppo_cost = "results/testing/run_1/cost/ppo_deepsets/"
+    path_dqn_cost = "results/testing/run_1/cost/dqn_deepsets/"
+    path_ppo_latency = "results/testing/run_1/latency/ppo_deepsets/"
+    path_dqn_latency = "results/testing/run_1/latency/dqn_deepsets/"
 
     avg_reward_ppo = []
     ci_avg_reward_ppo = []
@@ -66,8 +68,28 @@ if __name__ == "__main__":
     ci_avg_ep_block_prob_dqn = []
     avg_executionTime_dqn = []
 
-    if os.path.exists(path_ppo):
-        for file in glob.glob(f"{path_ppo}/*_gym_*.csv"):
+    avg_reward_ppo_latency = []
+    ci_avg_reward_ppo_latency = []
+    avg_latency_ppo_latency = []
+    ci_avg_latency_ppo_latency = []
+    avg_cost_ppo_latency = []
+    ci_avg_cost_ppo_latency = []
+    avg_ep_block_prob_ppo_latency = []
+    ci_avg_ep_block_prob_ppo_latency = []
+    avg_executionTime_ppo_latency = []
+
+    avg_reward_dqn_latency = []
+    ci_avg_reward_dqn_latency = []
+    avg_latency_dqn_latency = []
+    ci_avg_latency_dqn_latency = []
+    avg_cost_dqn_latency = []
+    ci_avg_cost_dqn_latency = []
+    avg_ep_block_prob_dqn_latency = []
+    ci_avg_ep_block_prob_dqn_latency = []
+    avg_executionTime_dqn_latency = []
+
+    if os.path.exists(path_ppo_cost):
+        for file in glob.glob(f"{path_ppo_cost}/*_gym_*.csv"):
             print(f"\n######### Opening {file} #########")
             df = pd.read_csv(file)
             get_statistics(df, file,
@@ -77,8 +99,8 @@ if __name__ == "__main__":
                            avg_ep_block_prob_ppo, ci_avg_ep_block_prob_ppo,
                            avg_executionTime_ppo)
 
-    if os.path.exists(path_dqn):
-        for file in glob.glob(f"{path_dqn}/*_gym_*.csv"):
+    if os.path.exists(path_dqn_cost):
+        for file in glob.glob(f"{path_dqn_cost}/*_gym_*.csv"):
             print(f"\n######### Opening {file} #########")
             df = pd.read_csv(file)
             get_statistics(df, file,
@@ -88,23 +110,57 @@ if __name__ == "__main__":
                            avg_ep_block_prob_dqn, ci_avg_ep_block_prob_dqn,
                            avg_executionTime_dqn)
 
+    if os.path.exists(path_ppo_latency):
+        for file in glob.glob(f"{path_ppo_latency}/*_gym_*.csv"):
+            print(f"\n######### Opening {file} #########")
+            df = pd.read_csv(file)
+            get_statistics(df, file,
+                           avg_reward_ppo_latency, ci_avg_reward_ppo_latency,
+                           avg_latency_ppo_latency, ci_avg_latency_ppo_latency,
+                           avg_cost_ppo_latency, ci_avg_cost_ppo_latency,
+                           avg_ep_block_prob_ppo_latency, ci_avg_ep_block_prob_ppo_latency,
+                           avg_executionTime_ppo_latency)
+
+    if os.path.exists(path_dqn_latency):
+        for file in glob.glob(f"{path_dqn_latency}/*_gym_*.csv"):
+            print(f"\n######### Opening {file} #########")
+            df = pd.read_csv(file)
+            get_statistics(df, file,
+                           avg_reward_dqn_latency, ci_avg_reward_dqn_latency,
+                           avg_latency_dqn_latency, ci_avg_latency_dqn_latency,
+                           avg_cost_dqn_latency, ci_avg_cost_dqn_latency,
+                           avg_ep_block_prob_dqn_latency, ci_avg_ep_block_prob_dqn_latency,
+                           avg_executionTime_dqn_latency)
+
     # Accumulated Reward
     fig = plt.figure()
     x = [4, 8, 12, 16, 25, 32, 48, 64, 80, 128]
 
-    plt.errorbar(x, avg_reward_ppo, yerr=ci_avg_reward_ppo, linestyle=None,
-                 marker="s", color='#3399FF', label='Deepsets PPO', markersize=6)
+    plt.errorbar(x, avg_reward_ppo, yerr=ci_avg_reward_ppo,
+                 linestyle=None,
+                 marker="s", color='#3399FF', label='Deepsets PPO (Cost)',
+                 markersize=6)
 
-    plt.errorbar(x, avg_reward_dqn, yerr=ci_avg_reward_dqn, color='#EDB120',
-                 linestyle='dotted', marker="s", label='Deepsets DQN', markersize=6)
+    plt.errorbar(x, avg_reward_dqn, yerr=ci_avg_reward_dqn,
+                 marker='^', color='#EDB120',
+                 linestyle='dotted', label='Deepsets DQN (Cost)',
+                 markersize=6)
+
+    plt.errorbar(x, avg_reward_ppo_latency, yerr=ci_avg_reward_ppo_latency,
+                 marker='o', linestyle='dashed',
+                 color='#4B7CAE', label='Deepsets PPO (Latency)', markersize=6)
+
+    plt.errorbar(x, avg_reward_dqn_latency, yerr=ci_avg_reward_dqn_latency,
+                 marker='x', color='#B99541',
+                 linestyle='-.', label='Deepsets DQN (Latency)', markersize=6)
 
     # specifying horizontal line type
-    plt.axhline(y=max_reward, color='black', linestyle='--', label="max reward= " + str(max_reward))
+    # plt.axhline(y=max_reward, color='black', linestyle='--', label="max reward= " + str(max_reward))
     # plt.yscale('log')
 
     # set x and y limits
-    plt.xlim(0, 129)
-    plt.ylim(0, ylim)
+    # plt.xlim(0, 129)
+    # plt.ylim(0, 1600)
 
     # set x-axis label
     plt.xlabel("Total Number of clusters", fontsize=14)
@@ -116,15 +172,33 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
     # plt.show()
-    plt.savefig('plot_per_cluster_reward.png', dpi=250, bbox_inches='tight')
+    plt.savefig('plot_per_cluster_reward.pdf', dpi=250, bbox_inches='tight')
     plt.close()
 
     # Avg. Cost
-    plt.errorbar(x, avg_cost_ppo, yerr=ci_avg_cost_ppo, linestyle=None, marker="s", color='#3399FF',
-                 label='Deepsets PPO', markersize=6)
+    plt.errorbar(x, avg_cost_ppo, yerr=ci_avg_cost_ppo,
+                 linestyle=None,
+                 marker="s", color='#3399FF', label='Deepsets PPO (Cost)',
+                 markersize=6)
 
-    plt.errorbar(x, avg_cost_dqn, yerr=ci_avg_cost_dqn, color='#EDB120',
-                 linestyle='dotted', marker="s", label='Deepsets DQN', markersize=6)
+    plt.errorbar(x, avg_cost_dqn, yerr=ci_avg_cost_dqn,
+                 marker='^', color='#EDB120',
+                 linestyle='dotted', label='Deepsets DQN (Cost)',
+                 markersize=6)
+
+    plt.errorbar(x, avg_cost_ppo_latency, yerr=ci_avg_cost_ppo_latency,
+                 marker='o', linestyle='dashed',
+                 color='#4B7CAE', label='Deepsets PPO (Latency)', markersize=6)
+
+    plt.errorbar(x, avg_cost_dqn_latency, yerr=ci_avg_cost_dqn_latency,
+                 marker='x', color='#B99541',
+                 linestyle='-.', label='Deepsets DQN (Latency)', markersize=6)
+
+    #plt.errorbar(x, avg_cost_ppo, yerr=ci_avg_cost_ppo, linestyle=None, marker="s", color='#3399FF',
+    #             label='Deepsets PPO', markersize=6)
+
+    #plt.errorbar(x, avg_cost_dqn, yerr=ci_avg_cost_dqn, color='#EDB120',
+    #             linestyle='dotted', marker="s", label='Deepsets DQN', markersize=6)
 
     # specifying horizontal line type
     # plt.axhline(y=1800, color='black', linestyle='--', label="max reward= 1500 ")
@@ -132,7 +206,7 @@ if __name__ == "__main__":
 
     # set x and y limits
     plt.xlim(0, 129)
-    plt.ylim(0, 18)
+    plt.ylim(0, 20)
 
     # set x-axis label
     plt.xlabel("Total Number of clusters", fontsize=14)
@@ -144,15 +218,33 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
     # plt.show()
-    plt.savefig('plot_per_cluster_cost.png', dpi=250, bbox_inches='tight')
+    plt.savefig('plot_per_cluster_cost.pdf', dpi=250, bbox_inches='tight')
     plt.close()
 
     # Avg latency
-    plt.errorbar(x, avg_latency_ppo, yerr=ci_avg_latency_ppo, linestyle=None, marker="s", color='#3399FF',
-                 label='Deepsets PPO', markersize=6)
+    plt.errorbar(x, avg_latency_ppo, yerr=ci_avg_latency_ppo,
+                 linestyle=None,
+                 marker="s", color='#3399FF', label='Deepsets PPO (Cost)',
+                 markersize=6)
 
-    plt.errorbar(x, avg_latency_dqn, yerr=ci_avg_latency_dqn, color='#EDB120',
-                 linestyle='dotted', marker="s", label='Deepsets DQN', markersize=6)
+    plt.errorbar(x, avg_latency_dqn, yerr=ci_avg_latency_dqn,
+                 marker='^', color='#EDB120',
+                 linestyle='dotted', label='Deepsets DQN (Cost)',
+                 markersize=6)
+
+    plt.errorbar(x, avg_latency_ppo_latency, yerr=ci_avg_latency_ppo_latency,
+                 marker='o', linestyle='dashed',
+                 color='#4B7CAE', label='Deepsets PPO (Latency)', markersize=6)
+
+    plt.errorbar(x, avg_latency_dqn_latency, yerr=ci_avg_latency_dqn_latency,
+                 marker='x', color='#B99541',
+                 linestyle='-.', label='Deepsets DQN (Latency)', markersize=6)
+
+    # plt.errorbar(x, avg_latency_ppo, yerr=ci_avg_latency_ppo, linestyle=None, marker="s", color='#3399FF',
+    #              label='Deepsets PPO', markersize=6)
+
+    # plt.errorbar(x, avg_latency_dqn, yerr=ci_avg_latency_dqn, color='#EDB120',
+    #              linestyle='dotted', marker="s", label='Deepsets DQN', markersize=6)
 
     # specifying horizontal line type
     # plt.axhline(y=1800, color='black', linestyle='--', label="max reward= 1500 ")
@@ -172,15 +264,32 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
     # plt.show()
-    plt.savefig('plot_per_cluster_latency.png', dpi=250, bbox_inches='tight')
+    plt.savefig('plot_per_cluster_latency.pdf', dpi=250, bbox_inches='tight')
     plt.close()
 
     # Episode Block Prob
-    plt.errorbar(x, avg_ep_block_prob_ppo, yerr=ci_avg_ep_block_prob_ppo, linestyle=None, marker="s", color='#3399FF',
-                 label='Deepsets PPO',
+    plt.errorbar(x, avg_ep_block_prob_ppo, yerr=ci_avg_ep_block_prob_ppo,
+                 linestyle=None,
+                 marker="s", color='#3399FF', label='Deepsets PPO (Cost)',
                  markersize=6)
-    plt.errorbar(x, avg_ep_block_prob_dqn, yerr=ci_avg_ep_block_prob_dqn, color='#EDB120',
-                 linestyle='dotted', marker="s", label='Deepsets DQN', markersize=6)
+
+    plt.errorbar(x, avg_ep_block_prob_dqn, yerr=ci_avg_ep_block_prob_dqn,
+                 marker='^', color='#EDB120',
+                 linestyle='dotted', label='Deepsets DQN (Cost)',
+                 markersize=6)
+
+    plt.errorbar(x, avg_ep_block_prob_ppo_latency, yerr=ci_avg_ep_block_prob_ppo_latency,
+                 marker='o', linestyle='dashed',
+                 color='#4B7CAE', label='Deepsets PPO (Latency)', markersize=6)
+
+    plt.errorbar(x, avg_ep_block_prob_dqn_latency, yerr=ci_avg_ep_block_prob_dqn_latency,
+                 marker='x', color='#B99541',
+                 linestyle='-.', label='Deepsets DQN (Latency)', markersize=6)
+
+    # plt.errorbar(x, avg_ep_block_prob_ppo, yerr=ci_avg_ep_block_prob_ppo, linestyle=None, marker="s", color='#3399FF',
+    #              label='Deepsets PPO', markersize=6)
+    # plt.errorbar(x, avg_ep_block_prob_dqn, yerr=ci_avg_ep_block_prob_dqn, color='#EDB120',
+    #              linestyle='dotted', marker="s", label='Deepsets DQN', markersize=6)
 
     # specifying horizontal line type
     # plt.axhline(y=1800, color='black', linestyle='--', label="max reward= 1500 ")
@@ -188,7 +297,7 @@ if __name__ == "__main__":
 
     # set x and y limits
     plt.xlim(0, 129)
-    plt.ylim(0, 0.15)
+    plt.ylim(0, 0.10)
 
     # set x-axis label
     plt.xlabel("Total Number of clusters", fontsize=14)
@@ -200,5 +309,5 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
     # plt.show()
-    plt.savefig('plot_per_cluster_rejected_requests.png', dpi=250, bbox_inches='tight')
+    plt.savefig('plot_per_cluster_rejected_requests.pdf', dpi=250, bbox_inches='tight')
     plt.close()

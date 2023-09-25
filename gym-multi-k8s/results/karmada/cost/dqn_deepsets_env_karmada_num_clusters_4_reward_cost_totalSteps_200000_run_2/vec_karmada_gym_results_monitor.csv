@@ -1,4 +1,4 @@
-episode,r,l,t,reward_step,action,reward,ep_block_prob,ep_accepted_requests,avg_latency,avg_cost,execution_time
+episode,r,l,t,reward_step,action,reward,ep_block_prob,ep_accepted_requests,avg_latency,avg_cost,executionTime
 1,834.91,100,0.108283,8,0,834.91,0.25,75,72.17,4.53,0
 2,407.54004,100,0.216328,8,1,407.54,0.24,76,75.5,10.32,0.09
 3,766.81,100,0.332281,8,3,766.81,0.18,82,71.95,6.43,0.1
