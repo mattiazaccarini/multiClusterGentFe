@@ -173,6 +173,7 @@ def main():
     total_steps = int(args.total_steps)
 
     env = get_env(env_name, num_clusters, reward)
+    print("env: {}".format(env))
 
     tensorboard_log = "results/" + env_name + "/" + reward + "/"
 
@@ -191,6 +192,7 @@ def main():
         else:
             if alg == "ppo_deepsets" or alg == 'dqn_deepsets':
                 model = get_model(alg, env, tensorboard_log)
+                print("model: {}".format(model))
                 model.learn(total_timesteps=total_steps)
             else:
                 model = get_model(alg, env, tensorboard_log)

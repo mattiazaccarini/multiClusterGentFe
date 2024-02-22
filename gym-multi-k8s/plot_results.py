@@ -1,18 +1,26 @@
 import logging
 from collections import namedtuple
+
+import matplotlib
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-stats = namedtuple("episode_stats", ["a2c_rewards", "mask_ppo_rewards", "deepsets_rewards", "deepsets_dqn_rewards",
-                                     "a2c_ep_block_prob", "mask_ppo_ep_block_prob", "deepsets_ep_block_prob",
+matplotlib.use('TkAgg')
+
+stats = namedtuple("episode_stats", ["a2c_rewards", "mask_ppo_rewards", "deepsets_rewards", "deepsets_dqn_rewards", "greedy_rewards",
+                                     "a2c_ep_block_prob", "mask_ppo_ep_block_prob", "deepsets_ep_block_prob", "greedy_ep_block_prob",
                                      "deepsets_dqn_ep_block_prob",
-                                     "a2c_latency", "mask_ppo_latency", "deepsets_latency", "deepsets_dqn_latency",
-                                     "a2c_cost", "mask_ppo_cost", "deepsets_cost", "deepsets_dqn_cost"
+                                     "a2c_latency", "mask_ppo_latency", "deepsets_latency", "deepsets_dqn_latency", "greedy_latency",
+                                     "a2c_cost", "mask_ppo_cost", "deepsets_cost", "deepsets_dqn_cost", "greedy_cost"
                                      ])
 
 
 def plot_stats(figName, stats, max_reward, smoothing_window=10):
+
+    # latency greedy: C521EE
+    # resource greedy: 7A21EE
+
     # Plot the episode reward over time
     a2c_rewards = pd.Series(stats.a2c_rewards).rolling(smoothing_window, min_periods=smoothing_window).mean()
 
@@ -24,6 +32,9 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
     deepsets_dqn_rewards = pd.Series(stats.deepsets_dqn_rewards).rolling(smoothing_window,
                                                                          min_periods=smoothing_window).mean()
 
+    greedy_rewards = pd.Series(stats.greedy_rewards).rolling(smoothing_window,
+                                                             min_periods=smoothing_window).mean()
+
     a2c_ep_block_prob = pd.Series(stats.a2c_ep_block_prob).rolling(smoothing_window,
                                                                    min_periods=smoothing_window).mean()
     mask_ppo_ep_block_prob = pd.Series(stats.mask_ppo_ep_block_prob).rolling(smoothing_window,
@@ -34,6 +45,9 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
     deepsets_dqn_ep_block_prob = pd.Series(stats.deepsets_dqn_ep_block_prob).rolling(smoothing_window,
                                                                                      min_periods=smoothing_window).mean()
 
+    greedy_ep_block_prob = pd.Series(stats.greedy_ep_block_prob).rolling(smoothing_window,
+                                                             min_periods=smoothing_window).mean()
+
     a2c_latency = pd.Series(stats.a2c_latency).rolling(smoothing_window,
                                                        min_periods=smoothing_window).mean()
     mask_ppo_latency = pd.Series(stats.mask_ppo_latency).rolling(smoothing_window,
@@ -43,6 +57,9 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
     deepsets_dqn_latency = pd.Series(stats.deepsets_dqn_latency).rolling(smoothing_window,
                                                                          min_periods=smoothing_window).mean()
 
+    greedy_latency = pd.Series(stats.greedy_latency).rolling(smoothing_window,
+                                                        min_periods=smoothing_window).mean()
+
     a2c_cost = pd.Series(stats.a2c_cost).rolling(smoothing_window,
                                                  min_periods=smoothing_window).mean()
     mask_ppo_cost = pd.Series(stats.mask_ppo_cost).rolling(smoothing_window,
@@ -51,6 +68,10 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
                                                            min_periods=smoothing_window).mean()
     deepsets_dqn_cost = pd.Series(stats.deepsets_dqn_cost).rolling(smoothing_window,
                                                                    min_periods=smoothing_window).mean()
+
+    greedy_cost = pd.Series(stats.greedy_cost).rolling(smoothing_window,
+                                               min_periods=smoothing_window).mean()
+
     fig = plt.figure()
     plt.plot(a2c_rewards,
              linestyle=None, color='#77AC30', label='A2C')
@@ -61,6 +82,9 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
     plt.plot(deepsets_dqn_rewards,
              linestyle='-.', color='#EDB120', label='Deepsets DQN')
 
+    plt.plot(greedy_rewards,
+            linestyle='dashdot', color='#7A21EE', label='Resource-Greedy')
+
     # specifying horizontal line type
     plt.axhline(y=max_reward, color='black', linestyle='--', label="max reward= " + str(max_reward))
     # plt.yscale('log')
@@ -68,7 +92,7 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
     plt.xlabel("Episode")
     plt.ylabel("Reward")
     plt.xlim(smoothing_window, 2000)
-    plt.ylim(0, 110)
+    plt.ylim(0, 1510)
     plt.legend()
     # plt.title("Episode Reward (Smoothed over window size {})".format(smoothing_window))
     plt.savefig(figName + '_reward.pdf', dpi=250, bbox_inches='tight')
@@ -85,6 +109,9 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
 
     plt.plot(deepsets_dqn_ep_block_prob,
              linestyle='-.', color='#EDB120', label='Deepsets DQN')
+
+    plt.plot(greedy_ep_block_prob,
+             linestyle='dashdot', color='#7A21EE', label='Resource-Greedy')
 
     plt.xlabel("Episode")
     plt.ylabel("Percentage of Rejected Requests")
@@ -107,6 +134,9 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
     plt.plot(deepsets_dqn_latency,
              linestyle='-.', color='#EDB120', label='Deepsets DQN')
 
+    plt.plot(greedy_latency,
+             linestyle='dashdot', color='#7A21EE', label='Resource-Greedy')
+
     plt.xlabel("Episode")
     plt.ylabel("Avg. Latency (in ms)")
     plt.xlim(smoothing_window, 2000)
@@ -126,6 +156,9 @@ def plot_stats(figName, stats, max_reward, smoothing_window=10):
 
     plt.plot(deepsets_dqn_cost,
              linestyle='-.', color='#EDB120', label='Deepsets DQN')
+
+    plt.plot(greedy_cost,
+             linestyle='dashdot', color='#7A21EE', label='Resource-Greedy')
 
     plt.xlabel("Episode")
     plt.ylabel("Avg. Cost (in units)")
@@ -198,12 +231,11 @@ def print_statistics(df, alg_name):
 
 
 if __name__ == "__main__":
-    reward = 'latency'  # cost, risk or latency
+    reward = 'cost'  # cost, risk or latency
     window = 200
-    max_reward= 100
+    max_reward= 1500
 
     # Training
-    '''
     file_a2c = "results/karmada/" \
                + reward + "/a2c_env_karmada_num_clusters_4_reward_" \
                + reward + "_totalSteps_200000_run_2/karmada_gym_results.csv"
@@ -219,18 +251,22 @@ if __name__ == "__main__":
     file_deepsets_dqn = "results/karmada/" \
                         + reward + "/dqn_deepsets_env_karmada_num_clusters_4_reward_" \
                         + reward + "_totalSteps_200000_run_2/vec_karmada_gym_results_monitor.csv"
+
+    file_greedy = "results/karmada/" + reward + "/resource_greedy/min_cost/karmada_gym_results.csv"
+
     '''
     # testing
     file_a2c = "results/testing/run_1/" + reward + "/a2c/karmada_gym_results.csv"
     file_mask_ppo = "results/testing/run_1/" + reward + "/mask_ppo/karmada_gym_results.csv"
     file_deepsets_ppo = "results/testing/run_1/" + reward + "/ppo_deepsets/0_karmada_gym_results_num_clusters_4.csv"
     file_deepsets_dqn = "results/testing/run_1/" + reward + "/dqn_deepsets/0_karmada_gym_results_num_clusters_4.csv"
-
+    '''
 
     df_a2c = pd.read_csv(file_a2c)
     df_mask_ppo = pd.read_csv(file_mask_ppo)
     df_deepsets_ppo = pd.read_csv(file_deepsets_ppo)
     df_deepsets_dqn = pd.read_csv(file_deepsets_dqn)
+    df_greedy = pd.read_csv(file_greedy)
 
     # remove_empty_lines(df_a2c)
     # remove_empty_lines(df_mask_ppo)
@@ -244,23 +280,28 @@ if __name__ == "__main__":
         mask_ppo_rewards=df_mask_ppo['reward'],
         deepsets_rewards=df_deepsets_ppo['reward'],
         deepsets_dqn_rewards=df_deepsets_dqn['reward'],
+        greedy_rewards= df_greedy['reward'],
         a2c_ep_block_prob=df_a2c['ep_block_prob'],
         mask_ppo_ep_block_prob=df_mask_ppo['ep_block_prob'],
         deepsets_ep_block_prob=df_deepsets_ppo['ep_block_prob'],
         deepsets_dqn_ep_block_prob=df_deepsets_dqn['ep_block_prob'],
+        greedy_ep_block_prob=df_greedy['ep_block_prob'],
         a2c_latency=df_a2c['avg_latency'],
         mask_ppo_latency=df_mask_ppo['avg_latency'],
         deepsets_latency=df_deepsets_ppo['avg_latency'],
         deepsets_dqn_latency=df_deepsets_dqn['avg_latency'],
+        greedy_latency=df_greedy['avg_latency'],
         a2c_cost=df_a2c['avg_cost'],
         mask_ppo_cost=df_mask_ppo['avg_cost'],
         deepsets_cost=df_deepsets_ppo['avg_cost'],
         deepsets_dqn_cost=df_deepsets_dqn['avg_cost'],
+        greedy_cost=df_greedy['avg_cost'],
     )
 
-    # plot_stats("karmada_training_" + reward, stats, max_reward=max_reward, smoothing_window=window)
+    plot_stats("karmada_training_" + reward, stats, max_reward=max_reward, smoothing_window=window)
 
     print_statistics(df_a2c, "a2c")
     print_statistics(df_mask_ppo, "mask_ppo")
     print_statistics(df_deepsets_ppo, "deepsets_ppo")
     print_statistics(df_deepsets_dqn, "deepsets_dqn")
+    print_statistics(df_greedy, "greedy")

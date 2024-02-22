@@ -137,6 +137,7 @@ class KarmadaSchedulingEnv(gym.Env):
         # New: Resource capacities based on cluster type
         self.cpu_capacity = np.zeros(num_clusters)
         self.memory_capacity = np.zeros(num_clusters)
+        self.default_cluster_types = DEFAULT_CLUSTER_TYPES
         self.cluster_type = [0] * num_clusters  # np.zeros(num_clusters)
 
         logging.info("[Init] Resource Capacity calculation... ")

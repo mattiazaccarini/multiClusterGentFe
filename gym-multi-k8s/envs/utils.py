@@ -1,10 +1,14 @@
 import csv
 from dataclasses import dataclass
+
+import gym
 import numpy as np
 import numpy.typing as npt
 
-
 # DeploymentRequest Info
+from numpy import mean
+
+
 @dataclass
 class DeploymentRequest:
     name: str
@@ -157,37 +161,80 @@ def get_c2e_deployment_list():
     return deployment_list
 
 
-def greedy_qos_policy(action_mask: npt.NDArray, lat_val: npt.NDArray) -> int:
-    """Returns the index of the feasible node with the lowest latency.
-    This policy does not take into account QoS requirements."""
-    feasible_nodes = np.argwhere(action_mask[:-1] == True).flatten()
-    if len(feasible_nodes) == 0:
-        return len(action_mask)
-    return feasible_nodes[np.argmin(lat_val[feasible_nodes])]
+def latency_greedy_policy(action_mask: npt.NDArray, lat_val: npt.NDArray, lat_threshold: float) -> int:
+    """Returns the index of a feasible node with latency < lat val."""
+    # Remove Last Two Actions
+    cluster_mask = np.logical_and(action_mask[:-2], lat_val <= lat_threshold)
+    feasible_clusters = np.argwhere(cluster_mask == True).flatten()
+    # print("Feasible clusters: {}".format(feasible_clusters))
+
+    if len(feasible_clusters) == 0:
+        return len(action_mask) - 1
+    return np.random.choice(feasible_clusters)
+    # return feasible_clusters[np.argmin(lat_val[feasible_clusters])]
 
 
-def greedy_lb_qos_policy(obs: npt.NDArray, action_mask: npt.NDArray, lat_val: npt.NDArray, service_lat: float) -> int:
-    """Returns the index of the feasible node with the lowest average weighted load
-    between cpu, ram, disk and bandwidth, and for which the latency is lower than the
-    QoS service requirement."""
-    node_mask = np.logical_and(action_mask[:-1], lat_val <= service_lat)
-    feasible_nodes = np.argwhere(node_mask == True).flatten()
-    # cpu, ram, disk and bandwidth are the first 4 columns of the observation matrix
-    mean_load = np.mean(obs[feasible_nodes, :4], axis=1).flatten()
-    if len(feasible_nodes) == 0:
-        return len(action_mask)
-    return feasible_nodes[np.argmin(mean_load)]
-
-
-def greedy_lb_policy(obs: npt.NDArray, action_mask: npt.NDArray) -> int:
+def cost_greedy_policy(env: gym.Env, action_mask: npt.NDArray) -> int:
     """Returns the index of the feasible node with the lowest average weighted load
     between cpu, ram, disk and bandwidth. It does not consider QoS latency requirements."""
-    feasible_nodes = np.argwhere(action_mask[:-1] == True).flatten()
-    # cpu, ram, disk and bandwidth are the first 4 columns of the observation matrix
-    mean_load = np.mean(obs[feasible_nodes, :4], axis=1).flatten()
-    if len(feasible_nodes) == 0:
-        return len(action_mask)
-    return feasible_nodes[np.argmin(mean_load)]
+    feasible_clusters = np.argwhere(action_mask[:-2] == True).flatten()
+    # print("Feasible clusters: {}".format(feasible_clusters))
+
+    mean_cost = []
+    # Calculate percentage of allocation for CPU and Memory for feasible clusters
+    for c in feasible_clusters:
+        # print("CPU capacity: {}".format(env.cpu_capacity[n]))
+        # print("MEM capacity: {}".format(env.memory_capacity[n]))
+        # print("CPU allocated: {}".format(env.allocated_cpu[n]))
+        # print("MEM allocated: {}".format(env.allocated_memory[n]))
+
+        type_id = env.cluster_type[c]
+        cost = env.default_cluster_types[type_id]['cost']
+        mean_cost.append(cost)
+
+    # print("Mean Load (CPU and MEM): {}".format(mean_load))
+
+    if len(feasible_clusters) == 0:
+        # print("Return action mask len: {}".format(len(action_mask) - 1))
+        return len(action_mask) - 1
+    # print("Return: {}".format(feasible_clusters[np.argmin(mean_load)]))
+    return feasible_clusters[np.argmin(mean_cost)]
+
+
+def resource_greedy_policy(env: gym.Env, obs: npt.NDArray, action_mask: npt.NDArray, lat_val: npt.NDArray,
+                           lat_threshold: float) -> int:
+    """Returns the index of the feasible node with the lowest average load CPU: and memory
+    # lower than the latency threshold"""
+
+    # print("Action Mask: {}".format(action_mask))
+    # print("Cluster Latency: {}".format(lat_val))
+    # print("Request Threshold: {}".format(lat_threshold))
+
+    # Remove Last Two Actions
+    # cluster_mask = np.logical_and(action_mask[:-2], lat_val <= lat_threshold)
+    # feasible_clusters = np.argwhere(cluster_mask == True).flatten()
+
+    feasible_clusters = np.argwhere(action_mask[:-2] == True).flatten()
+    # print("Feasible clusters: {}".format(feasible_clusters))
+
+    mean_load = []
+    # Calculate percentage of allocation for CPU and Memory for feasible clusters
+    for c in feasible_clusters:
+        type_id = env.cluster_type[c]
+        cost = env.default_cluster_types[type_id]['cost']
+        mean_load.append(cost)
+        # cpu = env.allocated_cpu[c] / env.cpu_capacity[c]
+        # mem = env.allocated_memory[c] / env.memory_capacity[c]
+        # mean_load = (cpu + mem)/2
+        # mean_load.append((cpu + mem) / 2)
+
+    # print("Mean Load (CPU and MEM): {}".format(mean_load))
+
+    if len(feasible_clusters) == 0:
+        # print("Return action mask len: {}".format(len(action_mask) - 1))
+        return len(action_mask) - 1
+    # print("Return: {}".format(feasible_clusters[np.argmin(mean_load)]))
+    return feasible_clusters[np.argmin(mean_load)]
 
 
 # TODO: modify function
